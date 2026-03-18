@@ -844,7 +844,9 @@ enum MenuBarIcon {
 				needleFrac = needleMin
 			} else if ratio <= yellowAt {
 				// 0 → yellowAt maps to needleMin → 0.389
-				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.389 - needleMin)
+				// Cubic curve: low ratios stay pinned left, climbs fast near yellow
+				let t = ratio / yellowAt  // 0–1 within green
+				needleFrac = needleMin + CGFloat(t * t) * (0.389 - needleMin)
 			} else if ratio <= redAt {
 				// yellowAt → redAt maps to 0.389 → 0.611
 				needleFrac = 0.389 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.611 - 0.389)
