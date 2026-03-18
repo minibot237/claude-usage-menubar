@@ -870,7 +870,8 @@ class StatusBarController: NSObject {
 		let gap: CGFloat = 5
 		let leftPad: CGFloat = 3
 		let totalWidth = leftPad + pieSize * 2 + gap
-		let totalHeight = pieSize
+		let topPad: CGFloat = 1
+		let totalHeight = pieSize + topPad
 
 		let dPie = MenuBarIcon.usagePie(
 			timeRemaining: dTimeLeft,
