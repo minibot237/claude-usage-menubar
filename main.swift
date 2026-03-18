@@ -1,4 +1,5 @@
 import Cocoa
+import WebKit
 
 // MARK: - Configuration
 
@@ -183,6 +184,167 @@ enum CredentialStore {
 	}
 }
 
+// MARK: - Auth Mode
+
+enum AuthMode {
+	case claudeCode(accessToken: String, orgId: String)
+	case cookie(sessionKey: String, orgId: String)
+	case none
+
+	var orgId: String? {
+		switch self {
+		case .claudeCode(_, let org): return org
+		case .cookie(_, let org): return org
+		case .none: return nil
+		}
+	}
+}
+
+// MARK: - Claude Code Auth
+
+enum ClaudeCodeAuth {
+	private static let claudeDir = NSHomeDirectory() + "/.claude"
+	private static let legacyServiceName = "Claude Code-credentials"
+
+	/// Try to get auth from Claude Code — credentials file first, then Keychain
+	static func readCredentials() -> (accessToken: String, orgId: String)? {
+		guard let json = readCredentialsJSON() else { return nil }
+		guard let data = json.data(using: .utf8),
+			  let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+			  let oauth = root["claudeAiOauth"] as? [String: Any],
+			  let token = oauth["accessToken"] as? String,
+			  !token.isEmpty else { return nil }
+
+		// Check expiry
+		if let expiresAt = oauth["expiresAt"] as? Double {
+			let epochSec = expiresAt > 1e12 ? expiresAt / 1000.0 : expiresAt
+			if Date() > Date(timeIntervalSince1970: epochSec) {
+				NSLog("ClaudeCodeAuth: token expired")
+				return nil
+			}
+		}
+
+		let orgId = root["organizationUuid"] as? String ?? ""
+		return (token, orgId)
+	}
+
+	private static func readCredentialsJSON() -> String? {
+		// 1. Try credentials files
+		for name in [".credentials.json", "credentials.json"] {
+			let path = claudeDir + "/" + name
+			if let data = FileManager.default.contents(atPath: path),
+			   let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+			   !str.isEmpty,
+			   let _ = try? JSONSerialization.jsonObject(with: data) {
+				NSLog("ClaudeCodeAuth: read from %@", name)
+				return str
+			}
+		}
+
+		// 2. Try Keychain
+		let serviceName = findKeychainServiceName() ?? legacyServiceName
+		let proc = Process()
+		proc.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+		proc.arguments = ["find-generic-password", "-s", serviceName, "-a", NSUserName(), "-w"]
+		let out = Pipe(); let err = Pipe()
+		proc.standardOutput = out; proc.standardError = err
+		do {
+			try proc.run()
+			proc.waitUntilExit()
+			guard proc.terminationStatus == 0 else { return nil }
+			let data = out.fileHandleForReading.readDataToEndOfFile()
+			guard let str = String(data: data, encoding: .utf8)?.trimmingCharacters(in: .whitespacesAndNewlines),
+				  !str.isEmpty else { return nil }
+
+			// Validate JSON
+			if let d = str.data(using: .utf8), let _ = try? JSONSerialization.jsonObject(with: d) {
+				NSLog("ClaudeCodeAuth: read from Keychain")
+				return str
+			}
+
+			// Try regex extraction from truncated JSON
+			let pattern = "\"accessToken\"\\s*:\\s*\"([^\"]+)\""
+			if let regex = try? NSRegularExpression(pattern: pattern),
+			   let match = regex.firstMatch(in: str, range: NSRange(str.startIndex..., in: str)),
+			   let range = Range(match.range(at: 1), in: str) {
+				let token = String(str[range])
+				NSLog("ClaudeCodeAuth: extracted token via regex from truncated Keychain data")
+				return "{\"claudeAiOauth\":{\"accessToken\":\"\(token)\"}}"
+			}
+		} catch {}
+		return nil
+	}
+
+	private static func findKeychainServiceName() -> String? {
+		// Check legacy name first
+		if keychainHas(legacyServiceName) { return legacyServiceName }
+		// Search for hashed name
+		let proc = Process()
+		proc.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+		proc.arguments = ["dump-keychain"]
+		let out = Pipe()
+		proc.standardOutput = out; proc.standardError = Pipe()
+		do {
+			try proc.run()
+			proc.waitUntilExit()
+			guard proc.terminationStatus == 0 else { return nil }
+			let output = String(data: out.fileHandleForReading.readDataToEndOfFile(), encoding: .utf8) ?? ""
+			let prefix = "Claude Code-credentials-"
+			for line in output.components(separatedBy: "\n") where line.contains("\"svce\"") && line.contains(prefix) {
+				if let eq = line.range(of: "=\""),
+				   let end = line.range(of: "\"", range: eq.upperBound..<line.endIndex) {
+					let name = String(line[eq.upperBound..<end.lowerBound])
+					if name.hasPrefix(prefix) { return name }
+				}
+			}
+		} catch {}
+		return nil
+	}
+
+	private static func keychainHas(_ service: String) -> Bool {
+		let p = Process()
+		p.executableURL = URL(fileURLWithPath: "/usr/bin/security")
+		p.arguments = ["find-generic-password", "-s", service, "-a", NSUserName()]
+		p.standardOutput = Pipe(); p.standardError = Pipe()
+		try? p.run(); p.waitUntilExit()
+		return p.terminationStatus == 0
+	}
+}
+
+// MARK: - Auth Resolver
+
+enum AuthResolver {
+	/// Resolve best available auth method: Claude Code OAuth > cookie > none
+	static func resolve() -> AuthMode {
+		// 1. Try Claude Code OAuth
+		if let creds = ClaudeCodeAuth.readCredentials() {
+			var orgId = creds.orgId
+			// If no orgId in credentials, try our saved one
+			if orgId.isEmpty, let saved = CredentialStore.readOrgId() {
+				orgId = saved
+			}
+			if !orgId.isEmpty {
+				NSLog("AuthResolver: using Claude Code OAuth")
+				return .claudeCode(accessToken: creds.accessToken, orgId: orgId)
+			}
+		}
+
+		// 2. Try cookie
+		if let key = CredentialStore.readSessionKey(),
+		   let org = CredentialStore.readOrgId() {
+			NSLog("AuthResolver: using session cookie")
+			return .cookie(sessionKey: key, orgId: org)
+		}
+
+		return .none
+	}
+
+	static var hasAnyCredentials: Bool {
+		if case .none = resolve() { return false }
+		return true
+	}
+}
+
 // MARK: - Org Discovery
 
 enum OrgDiscovery {
@@ -356,8 +518,8 @@ class UsagePoller {
 	}
 
 	func poll() {
-		guard let sessionKey = CredentialStore.readSessionKey(),
-			  let orgId = CredentialStore.readOrgId() else {
+		let auth = AuthResolver.resolve()
+		guard let orgId = auth.orgId else {
 			onError?("Missing credentials")
 			return
 		}
@@ -370,15 +532,27 @@ class UsagePoller {
 
 		var req = URLRequest(url: url)
 		req.httpMethod = "GET"
-		req.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
-		req.setValue(Config.userAgent, forHTTPHeaderField: "User-Agent")
-		req.setValue("application/json", forHTTPHeaderField: "Accept")
-		req.setValue("https://claude.ai", forHTTPHeaderField: "Referer")
-		req.setValue("claude.ai", forHTTPHeaderField: "Origin")
-		req.setValue("web_claude_ai", forHTTPHeaderField: "anthropic-client-platform")
-		req.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
-		req.setValue("cors", forHTTPHeaderField: "Sec-Fetch-Mode")
-		req.setValue("empty", forHTTPHeaderField: "Sec-Fetch-Dest")
+
+		switch auth {
+		case .claudeCode(let token, _):
+			req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+			req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+			req.setValue("claude-code/2.1.5", forHTTPHeaderField: "User-Agent")
+			req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
+		case .cookie(let sessionKey, _):
+			req.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
+			req.setValue(Config.userAgent, forHTTPHeaderField: "User-Agent")
+			req.setValue("application/json", forHTTPHeaderField: "Accept")
+			req.setValue("https://claude.ai", forHTTPHeaderField: "Referer")
+			req.setValue("claude.ai", forHTTPHeaderField: "Origin")
+			req.setValue("web_claude_ai", forHTTPHeaderField: "anthropic-client-platform")
+			req.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
+			req.setValue("cors", forHTTPHeaderField: "Sec-Fetch-Mode")
+			req.setValue("empty", forHTTPHeaderField: "Sec-Fetch-Dest")
+		case .none:
+			onError?("No credentials")
+			return
+		}
 
 		URLSession.shared.dataTask(with: req) { [weak self] data, response, error in
 			if let error = error {
@@ -391,8 +565,10 @@ class UsagePoller {
 				return
 			}
 
-			// Cookie rotation: capture rotated sessionKey
-			self?.handleCookieRotation(http)
+			// Cookie rotation: only relevant in cookie mode
+			if case .cookie = auth {
+				self?.handleCookieRotation(http)
+			}
 
 			guard (200...299).contains(http.statusCode) else {
 				let msg: String
@@ -1310,37 +1486,148 @@ class IntegrationInfoHandler: NSObject {
 	}
 }
 
+// MARK: - Browser Sign-In
+
+class BrowserSignIn: NSObject, WKNavigationDelegate {
+	private var window: NSWindow?
+	private var webView: WKWebView?
+	var onComplete: ((String, String?) -> Void)?  // (sessionKey, orgId?)
+
+	func show() {
+		NSApp.activate(ignoringOtherApps: true)
+
+		let config = WKWebViewConfiguration()
+		config.websiteDataStore = .nonPersistent()
+
+		let wv = WKWebView(frame: NSRect(x: 0, y: 0, width: 480, height: 640), configuration: config)
+		wv.navigationDelegate = self
+		webView = wv
+
+		let win = NSWindow(
+			contentRect: NSRect(x: 0, y: 0, width: 480, height: 640),
+			styleMask: [.titled, .closable, .resizable],
+			backing: .buffered, defer: false
+		)
+		win.title = "Sign in to Claude"
+		win.contentView = wv
+		win.center()
+		win.makeKeyAndOrderFront(nil)
+		win.level = .floating
+		window = win
+
+		wv.load(URLRequest(url: URL(string: "https://claude.ai/login")!))
+	}
+
+	func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
+		// After each page load, check for the sessionKey cookie
+		webView.configuration.websiteDataStore.httpCookieStore.getAllCookies { [weak self] cookies in
+			for cookie in cookies where cookie.name == "sessionKey" && cookie.value.hasPrefix("sk-ant-") {
+				let key = cookie.value
+				NSLog("BrowserSignIn: captured sessionKey")
+
+				// Try to get orgId from lastActiveOrg cookie
+				let orgId = cookies.first(where: { $0.name == "lastActiveOrg" })?.value
+
+				DispatchQueue.main.async {
+					self?.window?.close()
+					self?.window = nil
+					self?.webView = nil
+					self?.onComplete?(key, orgId)
+				}
+				return
+			}
+		}
+	}
+}
+
+// MARK: - Browser Sign In Action (for dialog button)
+
+class BrowserSignInAction: NSObject {
+	static let shared = BrowserSignInAction()
+	private let signIn = BrowserSignIn()
+
+	@objc func doSignIn() {
+		signIn.onComplete = { sessionKey, orgId in
+			CredentialStore.saveSessionKey(sessionKey)
+			if let org = orgId {
+				CredentialStore.saveOrgId(org)
+			} else {
+				// Discover org from the session key
+				discoverOrg(sessionKey: sessionKey)
+			}
+
+			let done = NSAlert()
+			done.messageText = "Signed in"
+			done.informativeText = "Session key captured from browser."
+			done.alertStyle = .informational
+			done.runModal()
+		}
+		signIn.show()
+	}
+}
+
 // MARK: - Setup Dialog
 
 func showSetupDialog(requireKey: Bool = false) {
 	NSApp.activate(ignoringOtherApps: true)
 
 	let prefs = Prefs.load()
+	let auth = AuthResolver.resolve()
 	let alert = NSAlert()
 	alert.messageText = "Claude Usage Settings"
+
+	let authStatus: String
+	switch auth {
+	case .claudeCode: authStatus = "Auth: Claude Code OAuth (auto-detected)"
+	case .cookie: authStatus = "Auth: Session cookie"
+	case .none: authStatus = "Auth: Not configured"
+	}
+
 	alert.informativeText =
-		"Enter your session key from claude.ai.\n\n" +
-		"Find it in browser DevTools:\n" +
-		"  Application > Cookies > claude.ai > sessionKey\n\n" +
-		"The org ID will be discovered automatically."
+		"\(authStatus)\n\n" +
+		"Three ways to authenticate:\n" +
+		"  1. Claude Code — auto-detected if installed & logged in\n" +
+		"  2. Browser Sign In — sign into claude.ai in-app\n" +
+		"  3. Manual — paste session key from DevTools"
 	alert.alertStyle = .informational
 
 	// Keep references alive during modal
 	var helpers: [AnyObject] = []
 
 	let w: CGFloat = 420
-	let height: CGFloat = 244
+	let height: CGFloat = 280
 	let container = NSView(frame: NSRect(x: 0, y: 0, width: w, height: height))
 	var y = height
 
-	// --- Session key ---
+	// --- Auth status + Browser Sign In ---
 	y -= 22
+	let authLabel = NSTextField(labelWithString: authStatus)
+	authLabel.frame = NSRect(x: 0, y: y, width: 280, height: 22)
+	authLabel.textColor = auth.orgId != nil ? .systemGreen : .secondaryLabelColor
+	authLabel.font = NSFont.systemFont(ofSize: 11)
+	container.addSubview(authLabel)
+
+	let browserBtn = NSButton(frame: NSRect(x: 290, y: y, width: 126, height: 22))
+	browserBtn.title = "Browser Sign In"
+	browserBtn.bezelStyle = .inline
+	browserBtn.target = BrowserSignInAction.shared
+	browserBtn.action = #selector(BrowserSignInAction.doSignIn)
+	container.addSubview(browserBtn)
+
+	// --- Divider ---
+	y -= 12
+	let divAuth = NSBox(frame: NSRect(x: 0, y: y, width: w, height: 1))
+	divAuth.boxType = .separator
+	container.addSubview(divAuth)
+
+	// --- Session key (manual fallback) ---
+	y -= 24
 	let keyLabel = NSTextField(labelWithString: "Session Key:")
 	keyLabel.frame = NSRect(x: 0, y: y, width: 95, height: 22)
 	container.addSubview(keyLabel)
 
 	let keyField = NSSecureTextField(frame: NSRect(x: 100, y: y, width: w - 100, height: 22))
-	keyField.placeholderString = "sk-ant-sid01-..."
+	keyField.placeholderString = "sk-ant-sid01-... (manual, if no Claude Code)"
 	container.addSubview(keyField)
 
 	// --- Divider ---
@@ -1607,7 +1894,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 	func applicationDidFinishLaunching(_ notification: Notification) {
 		installEditMenu()
-		if !CredentialStore.hasCredentials {
+		if !AuthResolver.hasAnyCredentials {
 			showSetupDialog(requireKey: true)
 		}
 		controller = StatusBarController()

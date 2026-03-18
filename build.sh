@@ -17,6 +17,7 @@ mkdir -p "$APP/Contents/Resources"
 swiftc -o "$APP/Contents/MacOS/claude-usage" \
 	"$SCRIPT_DIR/main.swift" \
 	-framework Cocoa \
+	-framework WebKit \
 	-O \
 	-suppress-warnings
 
