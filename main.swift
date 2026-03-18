@@ -459,20 +459,24 @@ enum MenuBarIcon {
 	/// - timeRemaining: 0–1, fraction of window remaining (1 = full, 0 = expired)
 	/// - usage: 0–1, fraction of limit used
 	/// - color: pace color (green/yellow/red)
-	static func usagePie(timeRemaining: Double, usage: Double, color: NSColor, size: CGFloat = 16) -> NSImage {
+	static func usagePie(timeRemaining: Double, usage: Double, color: NSColor, size: CGFloat = 18) -> NSImage {
 		let img = NSImage(size: NSSize(width: size, height: size))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
 			let center = CGPoint(x: size / 2, y: size / 2)
-			let radius = (size - 2) / 2  // inset for border
+			let radius = (size - 3) / 2  // inset for border
 			let startAngle = CGFloat.pi / 2  // 12 o'clock (CG coords: +Y is up)
+
+			// Clamp so neither wedge disappears entirely (min 5%, max 95%)
+			let clampedTime = min(0.95, max(0.05, timeRemaining))
+			let clampedUsage = min(0.95, max(0.05, usage))
 
 			// Detect menu bar appearance
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 			let bgGray: CGFloat = isDark ? 0.35 : 0.78
 
 			// --- Background: light gray arc for time remaining ---
-			let timeAngle = startAngle - CGFloat(timeRemaining) * 2 * .pi
+			let timeAngle = startAngle - CGFloat(clampedTime) * 2 * .pi
 			ctx.setFillColor(CGColor(gray: bgGray, alpha: 0.6))
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
@@ -481,7 +485,7 @@ enum MenuBarIcon {
 			ctx.fillPath()
 
 			// --- Colored wedge: usage % of the full circle ---
-			let usageAngle = startAngle - CGFloat(usage) * 2 * .pi
+			let usageAngle = startAngle - CGFloat(clampedUsage) * 2 * .pi
 			ctx.setFillColor(color.cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
@@ -489,10 +493,12 @@ enum MenuBarIcon {
 			ctx.closePath()
 			ctx.fillPath()
 
-			// --- Border ring in pace color ---
-			ctx.setStrokeColor(color.cgColor)
-			ctx.setLineWidth(1.2)
-			ctx.addEllipse(in: CGRect(x: 1, y: 1, width: size - 2, height: size - 2))
+			// --- Border ring: darker shade of pace color ---
+			let borderColor = color.blended(withFraction: 0.4, of: .black) ?? color
+			ctx.setStrokeColor(borderColor.cgColor)
+			ctx.setLineWidth(1.4)
+			let inset: CGFloat = 1.5
+			ctx.addEllipse(in: CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2))
 			ctx.strokePath()
 		}
 		img.unlockFocus()
