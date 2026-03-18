@@ -53,6 +53,7 @@ struct Organization: Decodable {
 
 struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
+	var displayPercentsInMenubar: Bool = true
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
@@ -589,7 +590,7 @@ class StatusBarController: NSObject {
 			}
 		}
 
-		statusItem.button?.attributedTitle = str
+		statusItem.button?.attributedTitle = Prefs.load().displayPercentsInMenubar ? str : NSAttributedString(string: "")
 
 		// Tooltip
 		let dp = PaceCalculator.pacePercent(
