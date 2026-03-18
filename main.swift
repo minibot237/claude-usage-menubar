@@ -901,7 +901,7 @@ enum MenuBarIcon {
 			ctx.setLineWidth(1.0)
 			ctx.stroke(CGRect(x: barInset + 0.5, y: 0.5, width: barWidth - 1, height: barH - 1))
 
-			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, elapsed)))
+			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, 1.0 - elapsed)))
 			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
 			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
 			ctx.fill(CGRect(x: barInset + 1, y: 1, width: filledWidth, height: barH - 2))
