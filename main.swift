@@ -17,6 +17,7 @@ enum Config {
 	static var sessionKeyPath: String { (configDir as NSString).appendingPathComponent("session-key") }
 	static var orgIdPath: String { (configDir as NSString).appendingPathComponent("org-id") }
 	static var sessionExpiryPath: String { (configDir as NSString).appendingPathComponent("session-expiry") }
+	static var latestPath: String { (configDir as NSString).appendingPathComponent("latest.json") }
 }
 
 // MARK: - API Models
@@ -489,6 +490,7 @@ class StatusBarController: NSObject {
 		poller.onUpdate = { [weak self] usage in
 			self?.lastUsage = usage
 			self?.render(usage)
+			Self.writeLatest(usage)
 		}
 
 		poller.onError = { [weak self] error in
@@ -697,6 +699,40 @@ class StatusBarController: NSObject {
 			}
 		}
 		return "  —  \(str2) remain"
+	}
+
+	private static func writeLatest(_ usage: UsageAPIResponse) {
+		let fmt = DateFormatter()
+		fmt.dateFormat = "yyyy-MM-dd'T'HH:mm:ssXXX"
+		fmt.timeZone = TimeZone(identifier: "America/Los_Angeles")
+
+		var dict: [String: Any] = [
+			"v": 1,
+			"updated_at": fmt.string(from: Date()),
+			"five_hour": [
+				"utilization": usage.fiveHour.utilization,
+				"resets_at": usage.fiveHour.resetsAt as Any,
+			],
+			"seven_day": [
+				"utilization": usage.sevenDay.utilization,
+				"resets_at": usage.sevenDay.resetsAt as Any,
+			],
+		]
+		if let sonnet = usage.sevenDaySonnet {
+			dict["seven_day_sonnet"] = [
+				"utilization": sonnet.utilization,
+				"resets_at": sonnet.resetsAt as Any,
+			]
+		}
+
+		CredentialStore.ensureDir()
+		if let data = try? JSONSerialization.data(withJSONObject: dict, options: [.prettyPrinted, .sortedKeys]) {
+			try? data.write(to: URL(fileURLWithPath: Config.latestPath), options: .atomic)
+			// 0o644 — world-readable, non-sensitive data
+			try? FileManager.default.setAttributes(
+				[.posixPermissions: 0o644], ofItemAtPath: Config.latestPath
+			)
+		}
 	}
 
 	@objc private func doRefresh() {
