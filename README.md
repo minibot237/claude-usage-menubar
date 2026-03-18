@@ -143,3 +143,7 @@ console.log(`5h: ${usage.five_hour.utilization}%`);
 ## Acknowledgments
 
 Inspired by [linuxlewis/claude-usage](https://github.com/linuxlewis/claude-usage). This is an independent implementation — no code was shared.
+
+---
+
+Yes, that's an em dash. We use em dashes around here.
