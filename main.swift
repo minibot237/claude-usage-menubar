@@ -605,13 +605,20 @@ class StatusBarController: NSObject {
 
 		menu.addItem(.separator())
 
-		let toggle = NSMenuItem(
-			title: nextDisplayLabel(),
-			action: #selector(togglePercents), keyEquivalent: ""
-		)
-		toggle.target = self
-		toggle.tag = 105
-		menu.addItem(toggle)
+		let displayItem = NSMenuItem(title: "Display", action: nil, keyEquivalent: "")
+		let displaySub = NSMenu()
+		for (i, label) in Self.displayLabels.enumerated() {
+			let item = NSMenuItem(title: label, action: #selector(setDisplayMode(_:)), keyEquivalent: "")
+			item.target = self
+			item.tag = 200 + i
+			if Self.displayModes[i] == Prefs.load().menuBarDisplay {
+				item.state = .on
+			}
+			displaySub.addItem(item)
+		}
+		displayItem.submenu = displaySub
+		displayItem.tag = 105
+		menu.addItem(displayItem)
 
 		let settings = NSMenuItem(
 			title: "Settings...", action: #selector(openSettings), keyEquivalent: ""
@@ -898,24 +905,22 @@ class StatusBarController: NSObject {
 		return combined
 	}
 
-	private static let displayModes = ["percentages", "pies", "icon"]
-	private static let displayLabels = ["Percentages", "Pies", "Icon"]
+	static let displayModes = ["percentages", "pies", "icon"]
+	static let displayLabels = ["Percentages", "Pies", "Icon"]
 
-	private func nextDisplayLabel() -> String {
-		let mode = Prefs.load().menuBarDisplay
-		let idx = Self.displayModes.firstIndex(of: mode) ?? 0
-		let next = (idx + 1) % Self.displayModes.count
-		return "Switch to \(Self.displayLabels[next])"
-	}
+	@objc private func setDisplayMode(_ sender: NSMenuItem) {
+		let idx = sender.tag - 200
+		guard idx >= 0, idx < Self.displayModes.count else { return }
 
-	@objc private func togglePercents() {
 		var prefs = Prefs.load()
-		let idx = Self.displayModes.firstIndex(of: prefs.menuBarDisplay) ?? 0
-		let next = (idx + 1) % Self.displayModes.count
-		prefs.menuBarDisplay = Self.displayModes[next]
+		prefs.menuBarDisplay = Self.displayModes[idx]
 		prefs.save()
 
-		statusItem.menu?.item(withTag: 105)?.title = nextDisplayLabel()
+		// Update checkmarks
+		if let sub = statusItem.menu?.item(withTag: 105)?.submenu {
+			for item in sub.items { item.state = .off }
+			sender.state = .on
+		}
 
 		applyMenuBarMode()
 
@@ -1165,12 +1170,24 @@ func showSetupDialog(requireKey: Bool = false) {
 	div2.boxType = .separator
 	container.addSubview(div2)
 
-	// --- Show Sonnet ---
+	// --- Show Sonnet + Display mode ---
 	y -= 26
 	let sCheck = NSButton(checkboxWithTitle: "Show Sonnet in menu", target: nil, action: nil)
 	sCheck.frame = NSRect(x: 0, y: y, width: 200, height: 22)
 	sCheck.state = prefs.showSonnet ? .on : .off
 	container.addSubview(sCheck)
+
+	let displayLabel = NSTextField(labelWithString: "Display:")
+	displayLabel.frame = NSRect(x: 230, y: y, width: 60, height: 22)
+	container.addSubview(displayLabel)
+
+	let displayPopup = NSPopUpButton(frame: NSRect(x: 290, y: y, width: 126, height: 22), pullsDown: false)
+	for label in StatusBarController.displayLabels {
+		displayPopup.addItem(withTitle: label)
+	}
+	let currentIdx = StatusBarController.displayModes.firstIndex(of: prefs.menuBarDisplay) ?? 0
+	displayPopup.selectItem(at: currentIdx)
+	container.addSubview(displayPopup)
 
 	// --- Divider ---
 	y -= 16
@@ -1213,6 +1230,10 @@ func showSetupDialog(requireKey: Bool = false) {
 		// Save prefs
 		var newPrefs = Prefs.load() // preserve pollIntervalSeconds from file
 		newPrefs.showSonnet = sCheck.state == .on
+		let modeIdx = displayPopup.indexOfSelectedItem
+		if modeIdx >= 0, modeIdx < StatusBarController.displayModes.count {
+			newPrefs.menuBarDisplay = StatusBarController.displayModes[modeIdx]
+		}
 		newPrefs.yellowEnabled = yCheck.state == .on
 		newPrefs.yellowDays = ys.integerValue
 		newPrefs.redEnabled = rCheck.state == .on
