@@ -55,7 +55,7 @@ struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var menuBarFontSize: Int = 14
-	var pieSize: Int = 24
+	var pieSize: Int = 26
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var colorGreen: String = "#23BF5F"
 	var colorYellow: String = "#FFBF00"
@@ -868,9 +868,9 @@ class StatusBarController: NSObject {
 
 		let pieSize: CGFloat = CGFloat(Prefs.load().pieSize)
 		let gap: CGFloat = 5
-		let bottomPad: CGFloat = 3
-		let totalWidth = pieSize * 2 + gap
-		let totalHeight = pieSize + bottomPad
+		let leftPad: CGFloat = 3
+		let totalWidth = leftPad + pieSize * 2 + gap
+		let totalHeight = pieSize
 
 		let dPie = MenuBarIcon.usagePie(
 			timeRemaining: dTimeLeft,
@@ -887,8 +887,8 @@ class StatusBarController: NSObject {
 
 		let combined = NSImage(size: NSSize(width: totalWidth, height: totalHeight))
 		combined.lockFocus()
-		dPie.draw(at: NSPoint(x: 0, y: bottomPad), from: .zero, operation: .sourceOver, fraction: 1.0)
-		wPie.draw(at: NSPoint(x: pieSize + gap, y: bottomPad), from: .zero, operation: .sourceOver, fraction: 1.0)
+		dPie.draw(at: NSPoint(x: leftPad, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+		wPie.draw(at: NSPoint(x: leftPad + pieSize + gap, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
 		combined.unlockFocus()
 		return combined
 	}
