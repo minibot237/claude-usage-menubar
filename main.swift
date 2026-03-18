@@ -34,10 +34,12 @@ struct UsageLimitResponse: Decodable {
 struct UsageAPIResponse: Decodable {
 	let fiveHour: UsageLimitResponse
 	let sevenDay: UsageLimitResponse
+	let sevenDaySonnet: UsageLimitResponse?
 
 	enum CodingKeys: String, CodingKey {
 		case fiveHour = "five_hour"
 		case sevenDay = "seven_day"
+		case sevenDaySonnet = "seven_day_sonnet"
 	}
 }
 
@@ -49,6 +51,7 @@ struct Organization: Decodable {
 // MARK: - Preferences
 
 struct Prefs: Codable {
+	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
 	var redEnabled: Bool = true
@@ -436,6 +439,11 @@ class StatusBarController: NSObject {
 		sevenDayItem.tag = 102
 		menu.addItem(sevenDayItem)
 
+		let sonnetItem = NSMenuItem(title: "sonnet: --", action: nil, keyEquivalent: "")
+		sonnetItem.tag = 103
+		sonnetItem.isHidden = !Prefs.load().showSonnet
+		menu.addItem(sonnetItem)
+
 		menu.addItem(.separator())
 
 		let cookieAge = NSMenuItem(title: "", action: nil, keyEquivalent: "")
@@ -535,6 +543,22 @@ class StatusBarController: NSObject {
 		statusItem.menu?.item(withTag: 102)?.title =
 			"7d: \(weekly.percentage)%\(sevenRemain)"
 
+		// Sonnet (tag 103) — shown when enabled in prefs and data present
+		if let sonnetItem = statusItem.menu?.item(withTag: 103) {
+			let prefs = Prefs.load()
+			if prefs.showSonnet, let sonnet = usage.sevenDaySonnet {
+				let s = PaceCalculator.calculate(
+					utilization: sonnet.utilization,
+					resetsAt: sonnet.resetsAt,
+					windowHours: 168.0
+				)
+				let sRemain = timeRemaining(resetsAt: sonnet.resetsAt, fine: false)
+				sonnetItem.title = "sonnet: \(s.percentage)%\(sRemain)"
+				sonnetItem.isHidden = false
+			} else {
+				sonnetItem.isHidden = true
+			}
+		}
 
 		// Cookie age menu item
 		updateCookieAgeItem()
@@ -675,7 +699,7 @@ func showSetupDialog(isSettings: Bool = false) {
 	// Keep references alive during modal
 	var helpers: [AnyObject] = []
 
-	let height: CGFloat = isSettings ? 136 : 30
+	let height: CGFloat = isSettings ? 170 : 30
 	let container = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: height))
 
 	let keyY: CGFloat = isSettings ? height - 22 : 4
@@ -689,6 +713,7 @@ func showSetupDialog(isSettings: Bool = false) {
 	container.addSubview(keyField)
 
 	var expiryStepper: NSStepper?
+	var sonnetCheck: NSButton?
 	var yellowCheck: NSButton?
 	var yellowStepper: NSStepper?
 	var redCheck: NSButton?
@@ -697,8 +722,9 @@ func showSetupDialog(isSettings: Bool = false) {
 	if isSettings {
 		let prefs = Prefs.load()
 		let row2Y: CGFloat = height - 56
-		let row3Y: CGFloat = height - 90
-		let row4Y: CGFloat = height - 124
+		let row2bY: CGFloat = height - 84
+		let row3Y: CGFloat = height - 118
+		let row4Y: CGFloat = height - 152
 
 		// Row 2: Expires in [30] [↕] days   Apr 16, 2026
 		let expiryLabel = NSTextField(labelWithString: "Expires in:")
@@ -740,6 +766,13 @@ func showSetupDialog(isSettings: Bool = false) {
 		es.action = #selector(ExpiryStepperDelegate.stepperChanged(_:))
 		expiryDelegate.updateDateLabel(days: initialDays)
 		helpers.append(expiryDelegate)
+
+		// Row 2b: Show Sonnet in menu
+		let sCheck = NSButton(checkboxWithTitle: "Show Sonnet in menu", target: nil, action: nil)
+		sCheck.frame = NSRect(x: 0, y: row2bY, width: 200, height: 22)
+		sCheck.state = prefs.showSonnet ? .on : .off
+		container.addSubview(sCheck)
+		sonnetCheck = sCheck
 
 		// Row 3: ☑ Yellow warn  [3] [↕] days before
 		let yCheck = NSButton(checkboxWithTitle: "Yellow warning", target: nil, action: nil)
@@ -828,6 +861,7 @@ func showSetupDialog(isSettings: Bool = false) {
 
 			// Save warn prefs
 			var prefs = Prefs()
+			prefs.showSonnet = sonnetCheck?.state == .on
 			prefs.yellowEnabled = yellowCheck?.state == .on
 			prefs.yellowDays = yellowStepper?.integerValue ?? 3
 			prefs.redEnabled = redCheck?.state == .on
