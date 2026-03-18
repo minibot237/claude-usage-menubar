@@ -708,18 +708,19 @@ enum MenuBarIcon {
 									   width: dotR * 2, height: dotR * 2))
 			ctx.restoreGState()
 
-			// --- Bottom bar: time elapsed with border (full width) ---
-			let barWidth = w
+			// --- Bottom bar: time elapsed with border (inset 2px to match arc) ---
+			let barInset: CGFloat = 2
+			let barWidth = w - barInset * 2
 
 			let borderColor = color.blended(withFraction: 0.20, of: .black) ?? color
 			ctx.setStrokeColor(borderColor.cgColor)
 			ctx.setLineWidth(1.0)
-			ctx.stroke(CGRect(x: 0.5, y: 0.5, width: barWidth - 1, height: barH - 1))
+			ctx.stroke(CGRect(x: barInset + 0.5, y: 0.5, width: barWidth - 1, height: barH - 1))
 
 			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, elapsed)))
 			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
 			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
-			ctx.fill(CGRect(x: 1, y: 1, width: filledWidth, height: barH - 2))
+			ctx.fill(CGRect(x: barInset + 1, y: 1, width: filledWidth, height: barH - 2))
 		}
 		img.unlockFocus()
 		return img
