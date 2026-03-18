@@ -55,7 +55,7 @@ struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var menuBarFontSize: Int = 14
-	var pieSize: Int = 22
+	var pieSize: Int = 24
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var colorGreen: String = "#23BF5F"
 	var colorYellow: String = "#FFBF00"
