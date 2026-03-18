@@ -53,7 +53,7 @@ struct Organization: Decodable {
 
 struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
-	var displayPercentsInMenubar: Bool = true
+	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
@@ -569,7 +569,7 @@ class StatusBarController: NSObject {
 		menu.addItem(.separator())
 
 		let toggle = NSMenuItem(
-			title: Prefs.load().displayPercentsInMenubar ? "Hide Percentages" : "Show Percentages",
+			title: nextDisplayLabel(),
 			action: #selector(togglePercents), keyEquivalent: ""
 		)
 		toggle.target = self
@@ -629,12 +629,14 @@ class StatusBarController: NSObject {
 			}
 		}
 
-		if Prefs.load().displayPercentsInMenubar {
+		let mode = Prefs.load().menuBarDisplay
+		switch mode {
+		case "percentages":
 			statusItem.button?.attributedTitle = str
-		} else {
-			// Pie chart mode
+		case "pies":
 			statusItem.button?.image = buildPieImage(usage: usage)
 			statusItem.button?.image?.isTemplate = false
+		default: break // "icon" — robot stays as-is
 		}
 
 		// Tooltip
@@ -788,13 +790,19 @@ class StatusBarController: NSObject {
 
 	private func applyMenuBarMode() {
 		guard let button = statusItem.button else { return }
-		let showPercents = Prefs.load().displayPercentsInMenubar
+		let mode = Prefs.load().menuBarDisplay
 
-		if showPercents {
+		switch mode {
+		case "percentages":
 			button.image = nil
 			button.imagePosition = .noImage
-		} else {
-			// Will be set to pie charts by render(), robot as placeholder
+		case "pies":
+			// Pie images set by render(), robot as placeholder until first poll
+			button.image = MenuBarIcon.robot()
+			button.image?.isTemplate = true
+			button.imagePosition = .imageOnly
+			button.attributedTitle = NSAttributedString(string: "")
+		default: // "icon"
 			button.image = MenuBarIcon.robot()
 			button.image?.isTemplate = true
 			button.imagePosition = .imageOnly
@@ -847,13 +855,24 @@ class StatusBarController: NSObject {
 		return combined
 	}
 
+	private static let displayModes = ["percentages", "pies", "icon"]
+	private static let displayLabels = ["Percentages", "Pies", "Icon"]
+
+	private func nextDisplayLabel() -> String {
+		let mode = Prefs.load().menuBarDisplay
+		let idx = Self.displayModes.firstIndex(of: mode) ?? 0
+		let next = (idx + 1) % Self.displayModes.count
+		return "Switch to \(Self.displayLabels[next])"
+	}
+
 	@objc private func togglePercents() {
 		var prefs = Prefs.load()
-		prefs.displayPercentsInMenubar.toggle()
+		let idx = Self.displayModes.firstIndex(of: prefs.menuBarDisplay) ?? 0
+		let next = (idx + 1) % Self.displayModes.count
+		prefs.menuBarDisplay = Self.displayModes[next]
 		prefs.save()
 
-		statusItem.menu?.item(withTag: 105)?.title =
-			prefs.displayPercentsInMenubar ? "Hide Percentages" : "Show Percentages"
+		statusItem.menu?.item(withTag: 105)?.title = nextDisplayLabel()
 
 		applyMenuBarMode()
 
