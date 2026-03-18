@@ -597,10 +597,9 @@ enum MenuBarIcon {
 			let centerY = barH + 3
 			let radius = (w - 4) / 2
 
-			// Arc sweep: 162° (90% of 180°), symmetric around vertical
-			// From 171° to 9° — leaves a small gap at the bottom
-			let startDeg: CGFloat = 171
-			let endDeg: CGFloat = 9
+			// Arc sweep: full 180° semicircle
+			let startDeg: CGFloat = 180
+			let endDeg: CGFloat = 0
 			let sweepDeg: CGFloat = startDeg - endDeg // 162°
 			let startRad = startDeg * .pi / 180
 			let endRad = endDeg * .pi / 180
