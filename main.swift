@@ -54,7 +54,12 @@ struct Organization: Decodable {
 struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
+	var menuBarFontSize: Int = 14
+	var pieSize: Int = 20
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
+	var colorGreen: String = "#23BF5F"
+	var colorYellow: String = "#FFBF00"
+	var colorRed: String = "#F04545"
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
@@ -230,6 +235,28 @@ enum OrgDiscovery {
 	}
 }
 
+// MARK: - Color Helpers
+
+extension NSColor {
+	convenience init(hex: String) {
+		let h = hex.trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+		var rgb: UInt64 = 0
+		Scanner(string: h).scanHexInt64(&rgb)
+		self.init(
+			srgbRed: CGFloat((rgb >> 16) & 0xFF) / 255,
+			green: CGFloat((rgb >> 8) & 0xFF) / 255,
+			blue: CGFloat(rgb & 0xFF) / 255,
+			alpha: 1
+		)
+	}
+}
+
+enum PaceColors {
+	static var green: NSColor { NSColor(hex: Prefs.load().colorGreen) }
+	static var yellow: NSColor { NSColor(hex: Prefs.load().colorYellow) }
+	static var red: NSColor { NSColor(hex: Prefs.load().colorRed) }
+}
+
 // MARK: - Pace Calculator
 
 struct PaceResult {
@@ -251,22 +278,22 @@ enum PaceCalculator {
 			  let resetDate = parseISO8601(resetsAt) else {
 			// No reset time — color by absolute usage
 			if usagePercent > 80 {
-				return PaceResult(percentage: pct, color: .systemRed)
+				return PaceResult(percentage: pct, color: PaceColors.red)
 			} else if usagePercent > 50 {
-				return PaceResult(percentage: pct, color: .systemYellow)
+				return PaceResult(percentage: pct, color: PaceColors.yellow)
 			}
-			return PaceResult(percentage: pct, color: NSColor(srgbRed: 0.35, green: 0.75, blue: 0.35, alpha: 1.0))
+			return PaceResult(percentage: pct, color: PaceColors.green)
 		}
 
 		let pace = computePace(resetDate: resetDate, windowHours: windowHours)
 		let greenCeiling = pace * (1 - yellowBand)
 
 		if usagePercent > pace {
-			return PaceResult(percentage: pct, color: .systemRed)
+			return PaceResult(percentage: pct, color: PaceColors.red)
 		} else if usagePercent > greenCeiling {
-			return PaceResult(percentage: pct, color: .systemYellow)
+			return PaceResult(percentage: pct, color: PaceColors.yellow)
 		} else {
-			return PaceResult(percentage: pct, color: NSColor(srgbRed: 0.35, green: 0.75, blue: 0.35, alpha: 1.0))
+			return PaceResult(percentage: pct, color: PaceColors.green)
 		}
 	}
 
@@ -513,7 +540,9 @@ class StatusBarController: NSObject {
 	private let poller = UsagePoller()
 	private var lastUsage: UsageAPIResponse?
 
-	private let menuFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+	private var menuFont: NSFont {
+		NSFont.monospacedDigitSystemFont(ofSize: CGFloat(Prefs.load().menuBarFontSize), weight: .medium)
+	}
 	private let timeFmt: DateFormatter = {
 		let f = DateFormatter()
 		f.dateFormat = "h:mm a"
@@ -836,7 +865,7 @@ class StatusBarController: NSObject {
 			resetsAt: usage.sevenDay.resetsAt, windowHours: 168.0
 		)
 
-		let pieSize: CGFloat = 18
+		let pieSize: CGFloat = CGFloat(Prefs.load().pieSize)
 		let gap: CGFloat = 3
 		let totalWidth = pieSize * 2 + gap
 
