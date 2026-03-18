@@ -53,6 +53,63 @@ Credentials are stored in `~/.config/claude-usage/`:
 - `session-key` — from browser DevTools > Application > Cookies > claude.ai > sessionKey
 - `org-id` — auto-discovered from session key, or manually from lastActiveOrg cookie
 
+## Integration
+
+After each successful poll, the app writes usage data to:
+
+```
+~/.config/claude-usage/latest.json
+```
+
+Other tools can read this file to get current usage without making their own API calls. No sockets, no HTTP — just read the file.
+
+### Schema (v1)
+
+```json
+{
+  "v": 1,
+  "updated_at": "2026-03-17T14:32:00-07:00",
+  "five_hour": {
+    "utilization": 42.5,
+    "resets_at": "2026-03-17T18:00:00Z"
+  },
+  "seven_day": {
+    "utilization": 15.3,
+    "resets_at": "2026-03-20T00:00:00Z"
+  },
+  "seven_day_sonnet": {
+    "utilization": 8.1,
+    "resets_at": "2026-03-20T00:00:00Z"
+  }
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `v` | Schema version (integer, currently 1) |
+| `updated_at` | When this file was written (Pacific time) |
+| `five_hour.utilization` | 5-hour window usage (0–100) |
+| `seven_day.utilization` | 7-day window usage (0–100) |
+| `resets_at` | UTC ISO 8601 timestamp when the window resets |
+| `seven_day_sonnet` | Optional, only present when the API returns it |
+
+The file is written atomically (readers never see partial data) with `0644` permissions. Poll frequency is 60 seconds, so the file is never more than ~1 minute stale.
+
+### Example: read from shell
+
+```bash
+jq '.five_hour.utilization' ~/.config/claude-usage/latest.json
+```
+
+### Example: read from Node
+
+```javascript
+const usage = JSON.parse(fs.readFileSync(
+  path.join(os.homedir(), '.config/claude-usage/latest.json'), 'utf-8'
+));
+console.log(`5h: ${usage.five_hour.utilization}%`);
+```
+
 ## Acknowledgments
 
 Inspired by [linuxlewis/claude-usage](https://github.com/linuxlewis/claude-usage). This is an independent implementation — no code was shared.

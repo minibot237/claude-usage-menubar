@@ -793,6 +793,42 @@ class SimpleStepperDelegate: NSObject {
 	}
 }
 
+// MARK: - Integration Info
+
+class IntegrationInfoHandler: NSObject {
+	static let shared = IntegrationInfoHandler()
+
+	@objc func showInfo() {
+		let info = NSAlert()
+		info.messageText = "Integration"
+		info.informativeText = """
+			After each poll, usage data is written to:
+			~/.config/claude-usage/latest.json
+
+			Schema (v1):
+			{
+			  "v": 1,
+			  "updated_at": "2026-03-17T14:32:00-07:00",
+			  "five_hour": { "utilization": 42.5, "resets_at": "..." },
+			  "seven_day": { "utilization": 15.3, "resets_at": "..." },
+			  "seven_day_sonnet": { "utilization": 8.1, "resets_at": "..." }
+			}
+
+			• utilization: 0–100 (percentage)
+			• resets_at: UTC ISO 8601
+			• updated_at: Pacific time
+			• seven_day_sonnet: optional
+			• File is atomic, 0644, updated every 60s
+
+			Shell: jq '.five_hour.utilization' ~/.config/claude-usage/latest.json
+			"""
+		info.alertStyle = .informational
+		info.addButton(withTitle: "OK")
+		info.window.level = .floating
+		info.runModal()
+	}
+}
+
 // MARK: - Setup Dialog
 
 func showSetupDialog(requireKey: Bool = false) {
@@ -812,7 +848,7 @@ func showSetupDialog(requireKey: Bool = false) {
 	var helpers: [AnyObject] = []
 
 	let w: CGFloat = 420
-	let height: CGFloat = 210
+	let height: CGFloat = 244
 	let container = NSView(frame: NSRect(x: 0, y: 0, width: w, height: height))
 	var y = height
 
@@ -947,6 +983,27 @@ func showSetupDialog(requireKey: Bool = false) {
 	sCheck.frame = NSRect(x: 0, y: y, width: 200, height: 22)
 	sCheck.state = prefs.showSonnet ? .on : .off
 	container.addSubview(sCheck)
+
+	// --- Divider ---
+	y -= 16
+	let div3 = NSBox(frame: NSRect(x: 0, y: y, width: w, height: 1))
+	div3.boxType = .separator
+	container.addSubview(div3)
+
+	// --- Integration info ---
+	y -= 26
+	let infoLabel = NSTextField(labelWithString: "File IPC: ~/.config/claude-usage/latest.json")
+	infoLabel.frame = NSRect(x: 0, y: y, width: 300, height: 22)
+	infoLabel.textColor = .secondaryLabelColor
+	infoLabel.font = NSFont.systemFont(ofSize: 11)
+	container.addSubview(infoLabel)
+
+	let infoBtn = NSButton(frame: NSRect(x: 310, y: y, width: 110, height: 22))
+	infoBtn.title = "Integration Info"
+	infoBtn.bezelStyle = .inline
+	infoBtn.target = IntegrationInfoHandler.shared
+	infoBtn.action = #selector(IntegrationInfoHandler.showInfo)
+	container.addSubview(infoBtn)
 
 	alert.accessoryView = container
 	alert.addButton(withTitle: "Save")
