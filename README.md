@@ -186,7 +186,7 @@ console.log(`5h: ${usage.five_hour.utilization}%`);
 
 ## Acknowledgments
 
-Inspired by [linuxlewis/claude-usage](https://github.com/linuxlewis/claude-usage). This is an independent implementation — no code was shared.
+Inspired by [linuxlewis/claude-usage](https://github.com/linuxlewis/claude-usage). OAuth endpoint and Claude Code credential discovery learned from [hamed-elfayome/Claude-Usage-Tracker](https://github.com/hamed-elfayome/Claude-Usage-Tracker). This is an independent implementation — no code was shared.
 
 ---
 
