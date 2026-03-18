@@ -582,54 +582,53 @@ enum MenuBarIcon {
 
 	/// Fuel gauge for menu bar.
 	/// - elapsed: 0–1, fraction of window elapsed
-	/// - usage: 0–1, fraction of limit used
+	/// - usage: 0–1, fraction of limit used (can exceed 1.0)
 	/// - color: pace color for the needle
-	static func gauge(elapsed: Double, usage: Double, color: NSColor, size: CGFloat = 28) -> NSImage {
-		let w = size
-		let barH: CGFloat = 5 // 1px border top/bottom + 3px fill
-		let h = size * 0.65 + barH + 3 // arc + gap + bar (1px more for gauge)
+	/// - width/height: gauge dimensions
+	static func gauge(elapsed: Double, usage: Double, color: NSColor,
+					  width: CGFloat = 31, height: CGFloat = 24) -> NSImage {
+		let w = width
+		let barH: CGFloat = 5 // 1px border + 3px fill + 1px border
+		let h = height
 		let img = NSImage(size: NSSize(width: w, height: h))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			let prefs = Prefs.load()
 
 			let centerX = w / 2
-			let centerY = barH + 0.5 // push gauge down to meet bar
+			let centerY = barH + 0.5
 			let radius = (w - 4) / 2
 
-			// Arc sweep: full 180° semicircle
-			let startDeg: CGFloat = 180
-			let endDeg: CGFloat = 0
-			let sweepDeg: CGFloat = startDeg - endDeg // 162°
-			let startRad = startDeg * .pi / 180
-			let endRad = endDeg * .pi / 180
+			// 180° sweep: 9 o'clock (180°) to 3 o'clock (0°)
+			let startRad: CGFloat = .pi       // 9 o'clock
+			let endRad: CGFloat = 0           // 3 o'clock
+			let sweep = startRad - endRad     // π
 
-			// --- Faint colored zone wedges (filled, from center to arc) ---
+			// Zone boundaries on the dial (fixed positions):
+			// Green:  9:00–11:00 = 0.000–0.333 of sweep
+			// Yellow: 11:00–1:00 = 0.333–0.667 of sweep
+			// Red:    1:00–3:00  = 0.667–1.000 of sweep
 			let center = CGPoint(x: centerX, y: centerY)
-			let greenColor = PaceColors.green.withAlphaComponent(0.15)
-			let yellowColor = PaceColors.yellow.withAlphaComponent(0.15)
-			let redColor = PaceColors.red.withAlphaComponent(0.15)
+			let greenEnd = startRad - sweep * 0.333
+			let yellowEnd = startRad - sweep * 0.667
 
-			// Green: 0–33% of sweep (9 o'clock to 11 o'clock)
-			let greenEnd = startRad - (sweepDeg * 0.33) * .pi / 180
-			ctx.setFillColor(greenColor.cgColor)
+			// --- Faint colored zone wedges ---
+			ctx.setFillColor(PaceColors.green.withAlphaComponent(0.20).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: startRad, endAngle: greenEnd, clockwise: true)
 			ctx.closePath()
 			ctx.fillPath()
 
-			// Yellow: 33–67% of sweep (11 o'clock to 1 o'clock)
-			let yellowEnd = startRad - (sweepDeg * 0.67) * .pi / 180
-			ctx.setFillColor(yellowColor.cgColor)
+			ctx.setFillColor(PaceColors.yellow.withAlphaComponent(0.20).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
 			ctx.closePath()
 			ctx.fillPath()
 
-			// Red: 75–100% of sweep
-			ctx.setFillColor(redColor.cgColor)
+			ctx.setFillColor(PaceColors.red.withAlphaComponent(0.20).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: yellowEnd, endAngle: endRad, clockwise: true)
@@ -637,16 +636,43 @@ enum MenuBarIcon {
 			ctx.fillPath()
 
 			// --- Thin arc outline ---
-			let outlineColor: CGFloat = isDark ? 0.4 : 0.65
-			ctx.setStrokeColor(CGColor(gray: outlineColor, alpha: 0.5))
+			let outlineGray: CGFloat = isDark ? 0.4 : 0.65
+			ctx.setStrokeColor(CGColor(gray: outlineGray, alpha: 0.5))
 			ctx.setLineWidth(0.8)
-			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+			ctx.addArc(center: center, radius: radius,
 					   startAngle: startRad, endAngle: endRad, clockwise: true)
 			ctx.strokePath()
 
-			// --- Needle ---
-			let clampedUsage = min(1.0, max(0.0, usage))
-			let needleAngle = startRad - CGFloat(clampedUsage) * (startRad - endRad)
+			// --- Non-linear needle mapping ---
+			// ratio = usage / pace. Maps to dial positions:
+			//   ratio 0        → 9:30  (0.083 of sweep) — minimum
+			//   ratio yellowAt → 11:00 (0.333) — entering yellow
+			//   ratio redAt    → 1:00  (0.667) — entering red
+			//   ratio 1.0      → 2:00  (0.833) — at pace exactly
+			//   ratio >1.0     → 2:00–3:00 (0.833–1.0) — over pace
+			let pace = elapsed  // fraction elapsed = pace fraction
+			let ratio = pace > 0 ? min(usage / pace, 1.5) : min(usage * 10, 1.5)
+			let yellowAt = prefs.yellowAtPace
+			let redAt = prefs.redAtPace
+
+			let needleFrac: CGFloat
+			if ratio <= 0 {
+				needleFrac = 0.083
+			} else if ratio <= yellowAt {
+				// 0 → yellowAt maps to 0.083 → 0.333
+				needleFrac = 0.083 + CGFloat(ratio / yellowAt) * (0.333 - 0.083)
+			} else if ratio <= redAt {
+				// yellowAt → redAt maps to 0.333 → 0.667
+				needleFrac = 0.333 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.667 - 0.333)
+			} else if ratio <= 1.0 {
+				// redAt → 1.0 maps to 0.667 → 0.833
+				needleFrac = 0.667 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.667)
+			} else {
+				// 1.0+ → 0.833 → 1.0 (over pace)
+				needleFrac = 0.833 + CGFloat(min((ratio - 1.0) / 0.5, 1.0)) * (1.0 - 0.833)
+			}
+
+			let needleAngle = startRad - CGFloat(needleFrac) * sweep
 			let needleLen = radius - 2
 			let needleTip = CGPoint(
 				x: centerX + needleLen * cos(needleAngle),
@@ -657,7 +683,7 @@ enum MenuBarIcon {
 			ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.3))
 			ctx.setLineWidth(2.5)
 			ctx.setLineCap(.round)
-			ctx.move(to: CGPoint(x: centerX, y: centerY))
+			ctx.move(to: center)
 			ctx.addLine(to: needleTip)
 			ctx.strokePath()
 
@@ -665,29 +691,28 @@ enum MenuBarIcon {
 			ctx.setStrokeColor(color.cgColor)
 			ctx.setLineWidth(2.0)
 			ctx.setLineCap(.round)
-			ctx.move(to: CGPoint(x: centerX, y: centerY))
+			ctx.move(to: center)
 			ctx.addLine(to: needleTip)
 			ctx.strokePath()
 
-			// Center dot (top half only — clips into the bar)
+			// Center dot (top half only)
 			let dotR: CGFloat = 2.5
 			ctx.saveGState()
 			ctx.clip(to: CGRect(x: 0, y: centerY, width: w, height: h))
 			ctx.setFillColor(color.cgColor)
-			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR, width: dotR * 2, height: dotR * 2))
+			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR,
+									   width: dotR * 2, height: dotR * 2))
 			ctx.restoreGState()
 
 			// --- Bottom bar: time elapsed with border ---
 			let barInset: CGFloat = 2
 			let barWidth = w - barInset * 2
 
-			// Border (1px stroke around the bar)
 			let borderColor = color.blended(withFraction: 0.20, of: .black) ?? color
 			ctx.setStrokeColor(borderColor.cgColor)
 			ctx.setLineWidth(1.0)
 			ctx.stroke(CGRect(x: barInset, y: 0.5, width: barWidth, height: barH - 1))
 
-			// Fill (4px inside the border)
 			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, elapsed)))
 			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
 			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
@@ -1109,8 +1134,8 @@ class StatusBarController: NSObject {
 		)
 
 		let prefs = Prefs.load()
-		let gaugeW: CGFloat = CGFloat(prefs.pieSize) // reuse pieSize for gauge width
-		let gaugeH = gaugeW * 0.75
+		let gaugeW: CGFloat = 31
+		let gaugeH: CGFloat = 24
 		let gap: CGFloat = CGFloat(prefs.pieGap)
 		let padL: CGFloat = CGFloat(prefs.piePadLeft)
 		let padR: CGFloat = CGFloat(prefs.piePadRight)
@@ -1120,13 +1145,13 @@ class StatusBarController: NSObject {
 			elapsed: dElapsed,
 			usage: usage.fiveHour.utilization / 100,
 			color: daily.color,
-			size: gaugeW
+			width: gaugeW, height: gaugeH
 		)
 		let wGauge = MenuBarIcon.gauge(
 			elapsed: wElapsed,
 			usage: usage.sevenDay.utilization / 100,
 			color: weekly.color,
-			size: gaugeW
+			width: gaugeW, height: gaugeH
 		)
 
 		let combined = NSImage(size: NSSize(width: totalWidth, height: gaugeH))
