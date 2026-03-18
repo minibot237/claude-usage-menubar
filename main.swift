@@ -586,8 +586,8 @@ enum MenuBarIcon {
 	/// - color: pace color for the needle
 	static func gauge(elapsed: Double, usage: Double, color: NSColor, size: CGFloat = 28) -> NSImage {
 		let w = size
-		let barH: CGFloat = 6 // 1px border top/bottom + 4px fill
-		let h = size * 0.65 + barH + 2 // arc + gap + bar
+		let barH: CGFloat = 5 // 1px border top/bottom + 3px fill
+		let h = size * 0.65 + barH + 3 // arc + gap + bar (1px more for gauge)
 		let img = NSImage(size: NSSize(width: w, height: h))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
