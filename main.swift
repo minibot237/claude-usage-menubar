@@ -55,7 +55,7 @@ struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var menuBarFontSize: Int = 14
-	var pieSize: Int = 28
+	var pieSize: Int = 26
 	var pieGap: Int = 5
 	var piePadLeft: Int = 8
 	var piePadRight: Int = 6
@@ -443,46 +443,67 @@ class UsagePoller {
 // MARK: - Menu Bar Icon
 
 enum MenuBarIcon {
-	/// Minibot robot head for menu bar (18x18 template)
+	/// Minibot robot head with Claude-ish hair sprigs for menu bar (18x18)
 	static func robot() -> NSImage {
 		let size: CGFloat = 18
 		let img = NSImage(size: NSSize(width: size, height: size))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
-			ctx.setFillColor(CGColor(gray: 1, alpha: 1))
-			ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
+			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			let headColor = isDark ? CGColor(gray: 1, alpha: 1) : CGColor(gray: 0.15, alpha: 1)
+			let hairColor = CGColor(srgbRed: 0.90, green: 0.55, blue: 0.20, alpha: 1) // warm orange
 
 			let s = size
 
 			// Head (rounded rect)
-			let headRect = CGRect(x: s * 0.15, y: s * 0.15, width: s * 0.7, height: s * 0.55)
+			let headRect = CGRect(x: s * 0.15, y: s * 0.10, width: s * 0.7, height: s * 0.52)
 			let headPath = CGPath(roundedRect: headRect, cornerWidth: s * 0.08,
 								  cornerHeight: s * 0.08, transform: nil)
+			ctx.setStrokeColor(headColor)
 			ctx.setLineWidth(1.5)
 			ctx.addPath(headPath)
 			ctx.strokePath()
 
-			// Antenna
-			ctx.setLineWidth(1.5)
-			ctx.move(to: CGPoint(x: s * 0.5, y: headRect.maxY))
-			ctx.addLine(to: CGPoint(x: s * 0.5, y: s * 0.88))
-			ctx.strokePath()
-			ctx.fillEllipse(in: CGRect(x: s * 0.5 - 2, y: s * 0.86, width: 4, height: 4))
-
 			// Eyes
+			ctx.setFillColor(headColor)
 			let eyeSize: CGFloat = 3
-			ctx.fill(CGRect(x: s * 0.32, y: headRect.midY, width: eyeSize, height: eyeSize))
-			ctx.fill(CGRect(x: s * 0.58, y: headRect.midY, width: eyeSize, height: eyeSize))
+			ctx.fill(CGRect(x: s * 0.32, y: headRect.midY - 1, width: eyeSize, height: eyeSize))
+			ctx.fill(CGRect(x: s * 0.58, y: headRect.midY - 1, width: eyeSize, height: eyeSize))
 
 			// Mouth (smile arc)
+			ctx.setStrokeColor(headColor)
 			ctx.setLineWidth(1.0)
-			ctx.move(to: CGPoint(x: s * 0.35, y: headRect.minY + s * 0.1))
-			ctx.addQuadCurve(to: CGPoint(x: s * 0.65, y: headRect.minY + s * 0.1),
-							 control: CGPoint(x: s * 0.5, y: headRect.minY + s * 0.02))
+			ctx.move(to: CGPoint(x: s * 0.35, y: headRect.minY + s * 0.08))
+			ctx.addQuadCurve(to: CGPoint(x: s * 0.65, y: headRect.minY + s * 0.08),
+							 control: CGPoint(x: s * 0.5, y: headRect.minY + s * 0.01))
+			ctx.strokePath()
+
+			// 3 hair sprigs — asymmetrical, Claude-ish curves
+			ctx.setStrokeColor(hairColor)
+			ctx.setLineWidth(1.6)
+			ctx.setLineCap(.round)
+			let topY = headRect.maxY
+
+			// Left sprig — short, leans left
+			ctx.move(to: CGPoint(x: s * 0.38, y: topY))
+			ctx.addQuadCurve(to: CGPoint(x: s * 0.28, y: topY + s * 0.22),
+							 control: CGPoint(x: s * 0.30, y: topY + s * 0.10))
+			ctx.strokePath()
+
+			// Center sprig — tallest, slight lean right
+			ctx.move(to: CGPoint(x: s * 0.52, y: topY))
+			ctx.addQuadCurve(to: CGPoint(x: s * 0.56, y: topY + s * 0.28),
+							 control: CGPoint(x: s * 0.48, y: topY + s * 0.16))
+			ctx.strokePath()
+
+			// Right sprig — medium, leans right
+			ctx.move(to: CGPoint(x: s * 0.64, y: topY))
+			ctx.addQuadCurve(to: CGPoint(x: s * 0.74, y: topY + s * 0.18),
+							 control: CGPoint(x: s * 0.70, y: topY + s * 0.12))
 			ctx.strokePath()
 		}
 		img.unlockFocus()
-		img.isTemplate = true
+		// Not a template — we need the orange hair color
 		return img
 	}
 	/// Usage pie chart for menu bar.
@@ -845,12 +866,10 @@ class StatusBarController: NSObject {
 		case "pies":
 			// Pie images set by render(), robot as placeholder until first poll
 			button.image = MenuBarIcon.robot()
-			button.image?.isTemplate = true
 			button.imagePosition = .imageOnly
 			button.attributedTitle = NSAttributedString(string: "")
 		default: // "icon"
 			button.image = MenuBarIcon.robot()
-			button.image?.isTemplate = true
 			button.imagePosition = .imageOnly
 			button.attributedTitle = NSAttributedString(string: "")
 		}
