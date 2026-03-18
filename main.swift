@@ -3,7 +3,7 @@ import Cocoa
 // MARK: - Configuration
 
 enum Config {
-	static let pollInterval: TimeInterval = 60
+	static let defaultPollInterval: TimeInterval = 60
 	static let paceThreshold: Double = 20.0
 	static let baseURL = "https://claude.ai/api"
 	static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
@@ -52,6 +52,7 @@ struct Organization: Decodable {
 // MARK: - Preferences
 
 struct Prefs: Codable {
+	var pollIntervalSeconds: Int = 60
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
@@ -302,9 +303,10 @@ class UsagePoller {
 	private var timer: Timer?
 
 	func start() {
+		let interval = TimeInterval(Prefs.load().pollIntervalSeconds)
 		poll()
 		timer = Timer.scheduledTimer(
-			withTimeInterval: Config.pollInterval, repeats: true
+			withTimeInterval: interval > 0 ? interval : Config.defaultPollInterval, repeats: true
 		) { [weak self] _ in
 			self?.poll()
 		}
@@ -1021,7 +1023,7 @@ func showSetupDialog(requireKey: Bool = false) {
 		CredentialStore.saveSessionExpiry(expiry)
 
 		// Save prefs
-		var newPrefs = Prefs()
+		var newPrefs = Prefs.load() // preserve pollIntervalSeconds from file
 		newPrefs.showSonnet = sCheck.state == .on
 		newPrefs.yellowEnabled = yCheck.state == .on
 		newPrefs.yellowDays = ys.integerValue
