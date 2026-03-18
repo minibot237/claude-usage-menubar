@@ -594,7 +594,7 @@ enum MenuBarIcon {
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 
 			let centerX = w / 2
-			let centerY = barH + 3
+			let centerY = barH + 0.5 // push gauge down to meet bar
 			let radius = (w - 4) / 2
 
 			// Arc sweep: full 180° semicircle
@@ -610,8 +610,8 @@ enum MenuBarIcon {
 			let yellowColor = PaceColors.yellow.withAlphaComponent(0.15)
 			let redColor = PaceColors.red.withAlphaComponent(0.15)
 
-			// Green: 0–40% of sweep
-			let greenEnd = startRad - (sweepDeg * 0.40) * .pi / 180
+			// Green: 0–33% of sweep (9 o'clock to 11 o'clock)
+			let greenEnd = startRad - (sweepDeg * 0.33) * .pi / 180
 			ctx.setFillColor(greenColor.cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
@@ -619,8 +619,8 @@ enum MenuBarIcon {
 			ctx.closePath()
 			ctx.fillPath()
 
-			// Yellow: 40–75% of sweep
-			let yellowEnd = startRad - (sweepDeg * 0.75) * .pi / 180
+			// Yellow: 33–67% of sweep (11 o'clock to 1 o'clock)
+			let yellowEnd = startRad - (sweepDeg * 0.67) * .pi / 180
 			ctx.setFillColor(yellowColor.cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
@@ -669,10 +669,13 @@ enum MenuBarIcon {
 			ctx.addLine(to: needleTip)
 			ctx.strokePath()
 
-			// Center dot
+			// Center dot (top half only — clips into the bar)
 			let dotR: CGFloat = 2.5
+			ctx.saveGState()
+			ctx.clip(to: CGRect(x: 0, y: centerY, width: w, height: h))
 			ctx.setFillColor(color.cgColor)
 			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR, width: dotR * 2, height: dotR * 2))
+			ctx.restoreGState()
 
 			// --- Bottom bar: time elapsed with border ---
 			let barInset: CGFloat = 2
