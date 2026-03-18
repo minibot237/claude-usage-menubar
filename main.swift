@@ -714,9 +714,11 @@ class StatusBarController: NSObject {
 			let worstColor: NSColor? = isRed ? PaceColors.red : isYellow ? PaceColors.yellow : nil
 			statusItem.button?.image = MenuBarIcon.robot(headTint: worstColor)
 
-			// Blink when red
+			// Blink when red (1s) or yellow (2s)
 			if isRed {
-				startBlink()
+				startBlink(color: PaceColors.red, interval: 1)
+			} else if isYellow {
+				startBlink(color: PaceColors.yellow, interval: 2)
 			} else {
 				stopBlink()
 			}
@@ -965,15 +967,21 @@ class StatusBarController: NSObject {
 		}
 	}
 
-	private func startBlink() {
-		guard blinkTimer == nil else { return }
+	private var blinkColor: NSColor = PaceColors.red
+	private var blinkInterval: TimeInterval = 1
+
+	private func startBlink(color: NSColor, interval: TimeInterval) {
+		if blinkTimer != nil && blinkColor == color && blinkInterval == interval { return }
+		stopBlink()
+		blinkColor = color
+		blinkInterval = interval
 		blinkOn = true
-		blinkTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+		blinkTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: true) { [weak self] _ in
 			guard let self = self,
 				  Prefs.load().menuBarDisplay == "icon" else { return }
 			self.blinkOn.toggle()
 			self.statusItem.button?.image = MenuBarIcon.robot(
-				headTint: self.blinkOn ? PaceColors.red : nil
+				headTint: self.blinkOn ? self.blinkColor : nil
 			)
 		}
 	}
