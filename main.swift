@@ -519,27 +519,30 @@ class UsagePoller {
 
 	func poll() {
 		let auth = AuthResolver.resolve()
-		guard let orgId = auth.orgId else {
-			onError?("Missing credentials")
-			return
-		}
 
-		let urlStr = "\(Config.baseURL)/organizations/\(orgId)/usage"
-		guard let url = URL(string: urlStr) else {
-			onError?("Invalid URL")
-			return
-		}
-
-		var req = URLRequest(url: url)
-		req.httpMethod = "GET"
-
+		var req: URLRequest
 		switch auth {
 		case .claudeCode(let token, _):
+			// OAuth path: Anthropic API directly — no Cloudflare, no org ID needed
+			guard let url = URL(string: "https://api.anthropic.com/api/oauth/usage") else {
+				onError?("Invalid URL")
+				return
+			}
+			req = URLRequest(url: url)
+			req.httpMethod = "GET"
 			req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
 			req.setValue("application/json", forHTTPHeaderField: "Content-Type")
 			req.setValue("claude-code/2.1.5", forHTTPHeaderField: "User-Agent")
 			req.setValue("oauth-2025-04-20", forHTTPHeaderField: "anthropic-beta")
-		case .cookie(let sessionKey, _):
+
+		case .cookie(let sessionKey, let orgId):
+			// Cookie path: claude.ai with Cloudflare-friendly headers
+			guard let url = URL(string: "\(Config.baseURL)/organizations/\(orgId)/usage") else {
+				onError?("Invalid URL")
+				return
+			}
+			req = URLRequest(url: url)
+			req.httpMethod = "GET"
 			req.setValue("sessionKey=\(sessionKey)", forHTTPHeaderField: "Cookie")
 			req.setValue(Config.userAgent, forHTTPHeaderField: "User-Agent")
 			req.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -549,8 +552,9 @@ class UsagePoller {
 			req.setValue("same-origin", forHTTPHeaderField: "Sec-Fetch-Site")
 			req.setValue("cors", forHTTPHeaderField: "Sec-Fetch-Mode")
 			req.setValue("empty", forHTTPHeaderField: "Sec-Fetch-Dest")
+
 		case .none:
-			onError?("No credentials")
+			onError?("Missing credentials")
 			return
 		}
 
