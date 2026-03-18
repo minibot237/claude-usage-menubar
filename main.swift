@@ -406,57 +406,43 @@ class UsagePoller {
 // MARK: - Menu Bar Icon
 
 enum MenuBarIcon {
-	/// Claude-inspired sparkle icon for menu bar (18x18 template)
-	static func sparkle() -> NSImage {
+	/// Minibot robot head for menu bar (18x18 template)
+	static func robot() -> NSImage {
 		let size: CGFloat = 18
 		let img = NSImage(size: NSSize(width: size, height: size))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
 			ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+			ctx.setStrokeColor(CGColor(gray: 1, alpha: 1))
 
-			let cx = size / 2
-			let cy = size / 2
+			let s = size
 
-			// Four-pointed sparkle with curved sides
-			// Each point is a diamond-ish petal drawn with bezier curves
-			let outer: CGFloat = 7.5   // tip distance from center
-			let inner: CGFloat = 2.2   // waist width (how pinched)
-			let ctrl: CGFloat = 1.0    // control point offset (curves the sides)
+			// Head (rounded rect)
+			let headRect = CGRect(x: s * 0.15, y: s * 0.15, width: s * 0.7, height: s * 0.55)
+			let headPath = CGPath(roundedRect: headRect, cornerWidth: s * 0.08,
+								  cornerHeight: s * 0.08, transform: nil)
+			ctx.setLineWidth(1.5)
+			ctx.addPath(headPath)
+			ctx.strokePath()
 
-			let path = NSBezierPath()
+			// Antenna
+			ctx.setLineWidth(1.5)
+			ctx.move(to: CGPoint(x: s * 0.5, y: headRect.maxY))
+			ctx.addLine(to: CGPoint(x: s * 0.5, y: s * 0.88))
+			ctx.strokePath()
+			ctx.fillEllipse(in: CGRect(x: s * 0.5 - 2, y: s * 0.86, width: 4, height: 4))
 
-			// Top point
-			path.move(to: NSPoint(x: cx, y: cy + outer))
-			path.curve(to: NSPoint(x: cx + inner, y: cy),
-					   controlPoint1: NSPoint(x: cx + ctrl, y: cy + outer * 0.45),
-					   controlPoint2: NSPoint(x: cx + inner, y: cy + ctrl))
-			// Right point
-			path.curve(to: NSPoint(x: cx + outer, y: cy),
-					   controlPoint1: NSPoint(x: cx + inner, y: cy + ctrl * 0.5),
-					   controlPoint2: NSPoint(x: cx + outer * 0.45, y: cy + ctrl * 0.3))
-			path.curve(to: NSPoint(x: cx + inner, y: cy),
-					   controlPoint1: NSPoint(x: cx + outer * 0.45, y: cy - ctrl * 0.3),
-					   controlPoint2: NSPoint(x: cx + inner, y: cy - ctrl * 0.5))
-			// Bottom point
-			path.curve(to: NSPoint(x: cx, y: cy - outer),
-					   controlPoint1: NSPoint(x: cx + inner, y: cy - ctrl),
-					   controlPoint2: NSPoint(x: cx + ctrl, y: cy - outer * 0.45))
-			path.curve(to: NSPoint(x: cx - inner, y: cy),
-					   controlPoint1: NSPoint(x: cx - ctrl, y: cy - outer * 0.45),
-					   controlPoint2: NSPoint(x: cx - inner, y: cy - ctrl))
-			// Left point
-			path.curve(to: NSPoint(x: cx - outer, y: cy),
-					   controlPoint1: NSPoint(x: cx - inner, y: cy - ctrl * 0.5),
-					   controlPoint2: NSPoint(x: cx - outer * 0.45, y: cy - ctrl * 0.3))
-			path.curve(to: NSPoint(x: cx - inner, y: cy),
-					   controlPoint1: NSPoint(x: cx - outer * 0.45, y: cy + ctrl * 0.3),
-					   controlPoint2: NSPoint(x: cx - inner, y: cy + ctrl * 0.5))
-			// Back to top
-			path.curve(to: NSPoint(x: cx, y: cy + outer),
-					   controlPoint1: NSPoint(x: cx - inner, y: cy + ctrl),
-					   controlPoint2: NSPoint(x: cx - ctrl, y: cy + outer * 0.45))
+			// Eyes
+			let eyeSize: CGFloat = 3
+			ctx.fill(CGRect(x: s * 0.32, y: headRect.midY, width: eyeSize, height: eyeSize))
+			ctx.fill(CGRect(x: s * 0.58, y: headRect.midY, width: eyeSize, height: eyeSize))
 
-			path.fill()
+			// Mouth (smile arc)
+			ctx.setLineWidth(1.0)
+			ctx.move(to: CGPoint(x: s * 0.35, y: headRect.minY + s * 0.1))
+			ctx.addQuadCurve(to: CGPoint(x: s * 0.65, y: headRect.minY + s * 0.1),
+							 control: CGPoint(x: s * 0.5, y: headRect.minY + s * 0.02))
+			ctx.strokePath()
 		}
 		img.unlockFocus()
 		img.isTemplate = true
@@ -483,10 +469,7 @@ class StatusBarController: NSObject {
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 		super.init()
 
-		if let button = statusItem.button {
-			button.image = MenuBarIcon.sparkle()
-			button.imagePosition = .imageLeading
-		}
+		applyMenuBarMode()
 
 		buildMenu()
 		statusItem.button?.title = "..."
@@ -599,7 +582,9 @@ class StatusBarController: NSObject {
 			}
 		}
 
-		statusItem.button?.attributedTitle = Prefs.load().displayPercentsInMenubar ? str : NSAttributedString(string: "")
+		if Prefs.load().displayPercentsInMenubar {
+			statusItem.button?.attributedTitle = str
+		}
 
 		// Tooltip
 		let dp = PaceCalculator.pacePercent(
@@ -745,20 +730,33 @@ class StatusBarController: NSObject {
 		}
 	}
 
+	private func applyMenuBarMode() {
+		guard let button = statusItem.button else { return }
+		let showPercents = Prefs.load().displayPercentsInMenubar
+
+		if showPercents {
+			button.image = nil
+			button.imagePosition = .noImage
+		} else {
+			button.image = MenuBarIcon.robot()
+			button.image?.isTemplate = true
+			button.imagePosition = .imageOnly
+			button.attributedTitle = NSAttributedString(string: "")
+		}
+	}
+
 	@objc private func togglePercents() {
 		var prefs = Prefs.load()
 		prefs.displayPercentsInMenubar.toggle()
 		prefs.save()
 
-		// Update menu item title
 		statusItem.menu?.item(withTag: 105)?.title =
 			prefs.displayPercentsInMenubar ? "Hide Percentages" : "Show Percentages"
 
-		// Re-render with current data
-		if let usage = lastUsage {
+		applyMenuBarMode()
+
+		if let usage = lastUsage, prefs.displayPercentsInMenubar {
 			render(usage)
-		} else {
-			statusItem.button?.attributedTitle = NSAttributedString(string: "")
 		}
 	}
 

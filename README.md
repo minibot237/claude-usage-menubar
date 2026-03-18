@@ -48,10 +48,40 @@ Add to System Settings > General > Login Items to start on boot.
 
 ## Configuration
 
-Credentials are stored in `~/.config/claude-usage/`:
+Credentials and preferences are stored in `~/.config/claude-usage/`:
+
+### Credentials
 
 - `session-key` — from browser DevTools > Application > Cookies > claude.ai > sessionKey
 - `org-id` — auto-discovered from session key, or manually from lastActiveOrg cookie
+
+### Preferences (`prefs.json`)
+
+Edit directly or use the Settings dialog. Restart the app after changing poll interval.
+
+```json
+{
+  "pollIntervalSeconds": 60,
+  "displayPercentsInMenubar": true,
+  "paceYellowBand": 0.25,
+  "showSonnet": false,
+  "yellowEnabled": true,
+  "yellowDays": 3,
+  "redEnabled": true,
+  "redDays": 0
+}
+```
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `pollIntervalSeconds` | `60` | How often to poll claude.ai (seconds) |
+| `displayPercentsInMenubar` | `true` | `true`: show D/W percentages, `false`: show robot icon |
+| `paceYellowBand` | `0.25` | Proportion of pace that triggers yellow (0–1). At 0.25, the top 25% of pace is yellow. Smaller = less warning, larger = more. |
+| `showSonnet` | `false` | Show Sonnet usage in dropdown menu |
+| `yellowEnabled` | `true` | Show yellow warning when session key is expiring |
+| `yellowDays` | `3` | Days before expiry to show yellow warning |
+| `redEnabled` | `true` | Show red warning when session key is expiring |
+| `redDays` | `0` | Days before expiry to show red warning |
 
 ## Integration
 
