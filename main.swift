@@ -526,6 +526,13 @@ class StatusBarController: NSObject {
 
 		menu.addItem(.separator())
 
+		let settings = NSMenuItem(
+			title: "Settings...", action: #selector(openSettings), keyEquivalent: ","
+		)
+		settings.keyEquivalentModifierMask = .command
+		settings.target = self
+		menu.addItem(settings)
+
 		let quit = NSMenuItem(
 			title: "Quit", action: #selector(doQuit), keyEquivalent: "q"
 		)
