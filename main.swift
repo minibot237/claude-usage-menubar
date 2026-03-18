@@ -694,7 +694,7 @@ class StatusBarController: NSObject {
 	}
 
 	@objc private func openSettings() {
-		showSetupDialog(isSettings: true)
+		showSetupDialog()
 		poller.poll()
 	}
 
@@ -748,11 +748,12 @@ class SimpleStepperDelegate: NSObject {
 
 // MARK: - Setup Dialog
 
-func showSetupDialog(isSettings: Bool = false) {
+func showSetupDialog(requireKey: Bool = false) {
 	NSApp.activate(ignoringOtherApps: true)
 
+	let prefs = Prefs.load()
 	let alert = NSAlert()
-	alert.messageText = isSettings ? "Claude Usage Settings" : "Claude Usage Setup"
+	alert.messageText = "Claude Usage Settings"
 	alert.informativeText =
 		"Enter your session key from claude.ai.\n\n" +
 		"Find it in browser DevTools:\n" +
@@ -763,149 +764,133 @@ func showSetupDialog(isSettings: Bool = false) {
 	// Keep references alive during modal
 	var helpers: [AnyObject] = []
 
-	let height: CGFloat = isSettings ? 170 : 30
+	let height: CGFloat = 170
 	let container = NSView(frame: NSRect(x: 0, y: 0, width: 420, height: height))
 
-	let keyY: CGFloat = isSettings ? height - 22 : 4
+	let row1Y: CGFloat = height - 22
+	let row2Y: CGFloat = height - 56
+	let row2bY: CGFloat = height - 84
+	let row3Y: CGFloat = height - 118
+	let row4Y: CGFloat = height - 152
 
+	// Row 1: Session key
 	let keyLabel = NSTextField(labelWithString: "Session Key:")
-	keyLabel.frame = NSRect(x: 0, y: keyY, width: 95, height: 22)
+	keyLabel.frame = NSRect(x: 0, y: row1Y, width: 95, height: 22)
 	container.addSubview(keyLabel)
 
-	let keyField = NSSecureTextField(frame: NSRect(x: 100, y: keyY, width: 316, height: 22))
+	let keyField = NSSecureTextField(frame: NSRect(x: 100, y: row1Y, width: 316, height: 22))
 	keyField.placeholderString = "sk-ant-sid01-..."
 	container.addSubview(keyField)
 
-	var expiryStepper: NSStepper?
-	var sonnetCheck: NSButton?
-	var yellowCheck: NSButton?
-	var yellowStepper: NSStepper?
-	var redCheck: NSButton?
-	var redStepper: NSStepper?
+	// Row 2: Expires in [30] [↕] days   Apr 16, 2026
+	let expiryLabel = NSTextField(labelWithString: "Expires in:")
+	expiryLabel.frame = NSRect(x: 0, y: row2Y, width: 95, height: 22)
+	container.addSubview(expiryLabel)
 
-	if isSettings {
-		let prefs = Prefs.load()
-		let row2Y: CGFloat = height - 56
-		let row2bY: CGFloat = height - 84
-		let row3Y: CGFloat = height - 118
-		let row4Y: CGFloat = height - 152
+	let initialDays = CredentialStore.sessionKeyDaysRemaining()
+		?? Config.cookieDefaultLifetimeDays
 
-		// Row 2: Expires in [30] [↕] days   Apr 16, 2026
-		let expiryLabel = NSTextField(labelWithString: "Expires in:")
-		expiryLabel.frame = NSRect(x: 0, y: row2Y, width: 95, height: 22)
-		container.addSubview(expiryLabel)
+	let expiryDaysField = NSTextField(frame: NSRect(x: 100, y: row2Y, width: 40, height: 22))
+	expiryDaysField.integerValue = initialDays
+	expiryDaysField.alignment = .center
+	expiryDaysField.isEditable = false
+	expiryDaysField.isSelectable = false
+	container.addSubview(expiryDaysField)
 
-		let initialDays = CredentialStore.sessionKeyDaysRemaining()
-			?? Config.cookieDefaultLifetimeDays
+	let daysLabel = NSTextField(labelWithString: "days")
+	daysLabel.frame = NSRect(x: 144, y: row2Y, width: 35, height: 22)
+	container.addSubview(daysLabel)
 
-		let expiryDaysField = NSTextField(frame: NSRect(x: 100, y: row2Y, width: 40, height: 22))
-		expiryDaysField.integerValue = initialDays
-		expiryDaysField.alignment = .center
-		expiryDaysField.isEditable = false
-		expiryDaysField.isSelectable = false
-		container.addSubview(expiryDaysField)
+	let es = NSStepper(frame: NSRect(x: 180, y: row2Y, width: 19, height: 22))
+	es.minValue = 0
+	es.maxValue = 90
+	es.integerValue = initialDays
+	es.increment = 1
+	es.valueWraps = false
+	container.addSubview(es)
 
-		let daysLabel = NSTextField(labelWithString: "days")
-		daysLabel.frame = NSRect(x: 144, y: row2Y, width: 35, height: 22)
-		container.addSubview(daysLabel)
+	let dateLabel = NSTextField(labelWithString: "")
+	dateLabel.frame = NSRect(x: 210, y: row2Y, width: 200, height: 22)
+	dateLabel.textColor = .secondaryLabelColor
+	container.addSubview(dateLabel)
 
-		let es = NSStepper(frame: NSRect(x: 180, y: row2Y, width: 19, height: 22))
-		es.minValue = 0
-		es.maxValue = 90
-		es.integerValue = initialDays
-		es.increment = 1
-		es.valueWraps = false
-		container.addSubview(es)
-		expiryStepper = es
+	let expiryDelegate = ExpiryStepperDelegate(
+		daysField: expiryDaysField, dateLabel: dateLabel
+	)
+	es.target = expiryDelegate
+	es.action = #selector(ExpiryStepperDelegate.stepperChanged(_:))
+	expiryDelegate.updateDateLabel(days: initialDays)
+	helpers.append(expiryDelegate)
 
-		let dateLabel = NSTextField(labelWithString: "")
-		dateLabel.frame = NSRect(x: 210, y: row2Y, width: 200, height: 22)
-		dateLabel.textColor = .secondaryLabelColor
-		container.addSubview(dateLabel)
+	// Row 2b: Show Sonnet in menu
+	let sCheck = NSButton(checkboxWithTitle: "Show Sonnet in menu", target: nil, action: nil)
+	sCheck.frame = NSRect(x: 0, y: row2bY, width: 200, height: 22)
+	sCheck.state = prefs.showSonnet ? .on : .off
+	container.addSubview(sCheck)
 
-		let expiryDelegate = ExpiryStepperDelegate(
-			daysField: expiryDaysField, dateLabel: dateLabel
-		)
-		es.target = expiryDelegate
-		es.action = #selector(ExpiryStepperDelegate.stepperChanged(_:))
-		expiryDelegate.updateDateLabel(days: initialDays)
-		helpers.append(expiryDelegate)
+	// Row 3: ☑ Yellow warn  [3] [↕] days before
+	let yCheck = NSButton(checkboxWithTitle: "Yellow warning", target: nil, action: nil)
+	yCheck.frame = NSRect(x: 0, y: row3Y, width: 140, height: 22)
+	yCheck.state = prefs.yellowEnabled ? .on : .off
+	container.addSubview(yCheck)
 
-		// Row 2b: Show Sonnet in menu
-		let sCheck = NSButton(checkboxWithTitle: "Show Sonnet in menu", target: nil, action: nil)
-		sCheck.frame = NSRect(x: 0, y: row2bY, width: 200, height: 22)
-		sCheck.state = prefs.showSonnet ? .on : .off
-		container.addSubview(sCheck)
-		sonnetCheck = sCheck
+	let yField = NSTextField(frame: NSRect(x: 148, y: row3Y, width: 34, height: 22))
+	yField.integerValue = prefs.yellowDays
+	yField.alignment = .center
+	yField.isEditable = false
+	yField.isSelectable = false
+	container.addSubview(yField)
 
-		// Row 3: ☑ Yellow warn  [3] [↕] days before
-		let yCheck = NSButton(checkboxWithTitle: "Yellow warning", target: nil, action: nil)
-		yCheck.frame = NSRect(x: 0, y: row3Y, width: 140, height: 22)
-		yCheck.state = prefs.yellowEnabled ? .on : .off
-		container.addSubview(yCheck)
-		yellowCheck = yCheck
+	let ys = NSStepper(frame: NSRect(x: 186, y: row3Y, width: 19, height: 22))
+	ys.minValue = 0
+	ys.maxValue = 30
+	ys.integerValue = prefs.yellowDays
+	ys.increment = 1
+	ys.valueWraps = false
+	container.addSubview(ys)
 
-		let yField = NSTextField(frame: NSRect(x: 148, y: row3Y, width: 34, height: 22))
-		yField.integerValue = prefs.yellowDays
-		yField.alignment = .center
-		yField.isEditable = false
-		yField.isSelectable = false
-		container.addSubview(yField)
+	let yLabel = NSTextField(labelWithString: "days before")
+	yLabel.frame = NSRect(x: 210, y: row3Y, width: 100, height: 22)
+	container.addSubview(yLabel)
 
-		let ys = NSStepper(frame: NSRect(x: 186, y: row3Y, width: 19, height: 22))
-		ys.minValue = 0
-		ys.maxValue = 30
-		ys.integerValue = prefs.yellowDays
-		ys.increment = 1
-		ys.valueWraps = false
-		container.addSubview(ys)
-		yellowStepper = ys
+	let yDelegate = SimpleStepperDelegate(field: yField)
+	ys.target = yDelegate
+	ys.action = #selector(SimpleStepperDelegate.stepperChanged(_:))
+	helpers.append(yDelegate)
 
-		let yLabel = NSTextField(labelWithString: "days before")
-		yLabel.frame = NSRect(x: 210, y: row3Y, width: 100, height: 22)
-		container.addSubview(yLabel)
+	// Row 4: ☑ Red warning  [0] [↕] days before
+	let rCheck = NSButton(checkboxWithTitle: "Red warning", target: nil, action: nil)
+	rCheck.frame = NSRect(x: 0, y: row4Y, width: 140, height: 22)
+	rCheck.state = prefs.redEnabled ? .on : .off
+	container.addSubview(rCheck)
 
-		let yDelegate = SimpleStepperDelegate(field: yField)
-		ys.target = yDelegate
-		ys.action = #selector(SimpleStepperDelegate.stepperChanged(_:))
-		helpers.append(yDelegate)
+	let rField = NSTextField(frame: NSRect(x: 148, y: row4Y, width: 34, height: 22))
+	rField.integerValue = prefs.redDays
+	rField.alignment = .center
+	rField.isEditable = false
+	rField.isSelectable = false
+	container.addSubview(rField)
 
-		// Row 4: ☑ Red warning  [0] [↕] days before
-		let rCheck = NSButton(checkboxWithTitle: "Red warning", target: nil, action: nil)
-		rCheck.frame = NSRect(x: 0, y: row4Y, width: 140, height: 22)
-		rCheck.state = prefs.redEnabled ? .on : .off
-		container.addSubview(rCheck)
-		redCheck = rCheck
+	let rs = NSStepper(frame: NSRect(x: 186, y: row4Y, width: 19, height: 22))
+	rs.minValue = 0
+	rs.maxValue = 30
+	rs.integerValue = prefs.redDays
+	rs.increment = 1
+	rs.valueWraps = false
+	container.addSubview(rs)
 
-		let rField = NSTextField(frame: NSRect(x: 148, y: row4Y, width: 34, height: 22))
-		rField.integerValue = prefs.redDays
-		rField.alignment = .center
-		rField.isEditable = false
-		rField.isSelectable = false
-		container.addSubview(rField)
+	let rLabel = NSTextField(labelWithString: "days before")
+	rLabel.frame = NSRect(x: 210, y: row4Y, width: 100, height: 22)
+	container.addSubview(rLabel)
 
-		let rs = NSStepper(frame: NSRect(x: 186, y: row4Y, width: 19, height: 22))
-		rs.minValue = 0
-		rs.maxValue = 30
-		rs.integerValue = prefs.redDays
-		rs.increment = 1
-		rs.valueWraps = false
-		container.addSubview(rs)
-		redStepper = rs
-
-		let rLabel = NSTextField(labelWithString: "days before")
-		rLabel.frame = NSRect(x: 210, y: row4Y, width: 100, height: 22)
-		container.addSubview(rLabel)
-
-		let rDelegate = SimpleStepperDelegate(field: rField)
-		rs.target = rDelegate
-		rs.action = #selector(SimpleStepperDelegate.stepperChanged(_:))
-		helpers.append(rDelegate)
-	}
+	let rDelegate = SimpleStepperDelegate(field: rField)
+	rs.target = rDelegate
+	rs.action = #selector(SimpleStepperDelegate.stepperChanged(_:))
+	helpers.append(rDelegate)
 
 	alert.accessoryView = container
 	alert.addButton(withTitle: "Save")
-	alert.addButton(withTitle: isSettings ? "Cancel" : "Quit")
+	alert.addButton(withTitle: requireKey ? "Quit" : "Cancel")
 
 	alert.window.level = .floating
 
@@ -914,36 +899,32 @@ func showSetupDialog(isSettings: Bool = false) {
 		let key = keyField.stringValue
 			.trimmingCharacters(in: .whitespacesAndNewlines)
 
-		if isSettings {
-			// Save expiry
-			if let es = expiryStepper {
-				let expiry = Calendar.current.date(
-					byAdding: .day, value: es.integerValue, to: Date()
-				) ?? Date()
-				CredentialStore.saveSessionExpiry(expiry)
-			}
+		// Save expiry
+		let expiry = Calendar.current.date(
+			byAdding: .day, value: es.integerValue, to: Date()
+		) ?? Date()
+		CredentialStore.saveSessionExpiry(expiry)
 
-			// Save warn prefs
-			var prefs = Prefs()
-			prefs.showSonnet = sonnetCheck?.state == .on
-			prefs.yellowEnabled = yellowCheck?.state == .on
-			prefs.yellowDays = yellowStepper?.integerValue ?? 3
-			prefs.redEnabled = redCheck?.state == .on
-			prefs.redDays = redStepper?.integerValue ?? 0
-			prefs.save()
-		}
+		// Save prefs
+		var newPrefs = Prefs()
+		newPrefs.showSonnet = sCheck.state == .on
+		newPrefs.yellowEnabled = yCheck.state == .on
+		newPrefs.yellowDays = ys.integerValue
+		newPrefs.redEnabled = rCheck.state == .on
+		newPrefs.redDays = rs.integerValue
+		newPrefs.save()
 
 		if !key.isEmpty {
 			CredentialStore.saveSessionKey(key)
 			discoverOrg(sessionKey: key)
-		} else if !isSettings {
+		} else if requireKey {
 			let err = NSAlert()
 			err.messageText = "Session key is required"
 			err.alertStyle = .warning
 			err.runModal()
-			showSetupDialog()
+			showSetupDialog(requireKey: true)
 		}
-	} else if !isSettings {
+	} else if requireKey {
 		NSApp.terminate(nil)
 	}
 
@@ -1013,7 +994,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 	func applicationDidFinishLaunching(_ notification: Notification) {
 		installEditMenu()
 		if !CredentialStore.hasCredentials {
-			showSetupDialog()
+			showSetupDialog(requireKey: true)
 		}
 		controller = StatusBarController()
 	}
