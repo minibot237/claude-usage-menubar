@@ -61,7 +61,7 @@ struct Prefs: Codable {
 	var piePadRight: Int = 6
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var colorGreen: String = "#23BF5F"
-	var colorYellow: String = "#FFBF00"
+	var colorYellow: String = "#FFD700"
 	var colorRed: String = "#F04545"
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
@@ -444,13 +444,15 @@ class UsagePoller {
 
 enum MenuBarIcon {
 	/// Minibot robot head with Claude-ish hair sprigs for menu bar (18x18)
-	static func robot() -> NSImage {
+	/// headTint: nil = default (white/black), or a color for warning states
+	static func robot(headTint: NSColor? = nil) -> NSImage {
 		let size: CGFloat = 18
 		let img = NSImage(size: NSSize(width: size, height: size))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-			let headColor = isDark ? CGColor(gray: 1, alpha: 1) : CGColor(gray: 0.15, alpha: 1)
+			let defaultColor = isDark ? CGColor(gray: 1, alpha: 1) : CGColor(gray: 0.15, alpha: 1)
+			let headColor = headTint?.cgColor ?? defaultColor
 			let hairColor = CGColor(srgbRed: 0.90, green: 0.55, blue: 0.20, alpha: 1) // warm orange
 
 			let s = size
@@ -563,6 +565,8 @@ class StatusBarController: NSObject {
 	private let statusItem: NSStatusItem
 	private let poller = UsagePoller()
 	private var lastUsage: UsageAPIResponse?
+	private var blinkTimer: Timer?
+	private var blinkOn = true
 
 	private var menuFont: NSFont {
 		NSFont.monospacedDigitSystemFont(ofSize: CGFloat(Prefs.load().menuBarFontSize), weight: .medium)
@@ -595,6 +599,7 @@ class StatusBarController: NSObject {
 		}
 
 		poller.start()
+
 	}
 
 	private func buildMenu() {
@@ -703,7 +708,18 @@ class StatusBarController: NSObject {
 			statusItem.button?.attributedTitle = NSAttributedString(string: "")
 			statusItem.button?.image = buildPieImage(usage: usage)
 			statusItem.button?.image?.isTemplate = false
-		default: break // "icon" — robot stays as-is
+		default: // "icon" — robot colored by worst pace
+			let isRed = daily.color == PaceColors.red || weekly.color == PaceColors.red
+			let isYellow = daily.color == PaceColors.yellow || weekly.color == PaceColors.yellow
+			let worstColor: NSColor? = isRed ? PaceColors.red : isYellow ? PaceColors.yellow : nil
+			statusItem.button?.image = MenuBarIcon.robot(headTint: worstColor)
+
+			// Blink when red
+			if isRed {
+				startBlink()
+			} else {
+				stopBlink()
+			}
 		}
 
 		// Tooltip
@@ -947,6 +963,25 @@ class StatusBarController: NSObject {
 		if let usage = lastUsage {
 			render(usage)
 		}
+	}
+
+	private func startBlink() {
+		guard blinkTimer == nil else { return }
+		blinkOn = true
+		blinkTimer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
+			guard let self = self,
+				  Prefs.load().menuBarDisplay == "icon" else { return }
+			self.blinkOn.toggle()
+			self.statusItem.button?.image = MenuBarIcon.robot(
+				headTint: self.blinkOn ? PaceColors.red : nil
+			)
+		}
+	}
+
+	private func stopBlink() {
+		blinkTimer?.invalidate()
+		blinkTimer = nil
+		blinkOn = true
 	}
 
 	@objc private func doRefresh() {
