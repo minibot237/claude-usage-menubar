@@ -600,14 +600,19 @@ class StatusBarController: NSObject {
 		}
 		statusItem.button?.toolTip = tip
 
-		// Menu detail lines
+		// Menu detail lines — pad shorter % to fake alignment
+		let dStr = "\(daily.percentage)%"
+		let wStr = "\(weekly.percentage)%"
+		let dPad = dStr.count < wStr.count ? " " : ""
+		let wPad = wStr.count < dStr.count ? " " : ""
+
 		let fiveRemain = timeRemaining(resetsAt: usage.fiveHour.resetsAt, fine: true)
 		statusItem.menu?.item(withTag: 100)?.title =
-			"5h: \(daily.percentage)%\(fiveRemain)"
+			"5h: \(dPad)\(dStr)\(fiveRemain)"
 
 		let sevenRemain = timeRemaining(resetsAt: usage.sevenDay.resetsAt, fine: false)
 		statusItem.menu?.item(withTag: 102)?.title =
-			"7d: \(weekly.percentage)%\(sevenRemain)"
+			"7d: \(wPad)\(wStr)\(sevenRemain)"
 
 		// Sonnet (tag 103) — shown when enabled in prefs and data present
 		if let sonnetItem = statusItem.menu?.item(withTag: 103) {
