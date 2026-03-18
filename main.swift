@@ -868,7 +868,7 @@ class StatusBarController: NSObject {
 
 		let pieSize: CGFloat = CGFloat(Prefs.load().pieSize)
 		let gap: CGFloat = 5
-		let bottomPad: CGFloat = 1
+		let bottomPad: CGFloat = 3
 		let totalWidth = pieSize * 2 + gap
 		let totalHeight = pieSize + bottomPad
 
