@@ -530,7 +530,7 @@ class StatusBarController: NSObject {
 		menu.addItem(toggle)
 
 		let settings = NSMenuItem(
-			title: "Configure...", action: #selector(openSettings), keyEquivalent: ""
+			title: "Settings", action: #selector(openSettings), keyEquivalent: ""
 		)
 		settings.target = self
 		menu.addItem(settings)
