@@ -283,6 +283,13 @@ enum PaceCalculator {
 		return min(max((elapsed / windowSeconds) * 100.0, 0), 100)
 	}
 
+	/// Fraction of window remaining (1.0 = just started, 0.0 = expired)
+	static func timeRemainingFraction(resetsAt: String?, windowHours: Double) -> Double {
+		guard let resetsAt = resetsAt,
+			  let resetDate = parseISO8601(resetsAt) else { return 0.5 }
+		return max(0, min(1, 1 - computePace(resetDate: resetDate, windowHours: windowHours) / 100))
+	}
+
 	static func parseDate(_ string: String) -> Date? {
 		parseISO8601(string)
 	}
@@ -448,6 +455,49 @@ enum MenuBarIcon {
 		img.isTemplate = true
 		return img
 	}
+	/// Usage pie chart for menu bar.
+	/// - timeRemaining: 0–1, fraction of window remaining (1 = full, 0 = expired)
+	/// - usage: 0–1, fraction of limit used
+	/// - color: pace color (green/yellow/red)
+	static func usagePie(timeRemaining: Double, usage: Double, color: NSColor, size: CGFloat = 16) -> NSImage {
+		let img = NSImage(size: NSSize(width: size, height: size))
+		img.lockFocus()
+		if let ctx = NSGraphicsContext.current?.cgContext {
+			let center = CGPoint(x: size / 2, y: size / 2)
+			let radius = (size - 2) / 2  // inset for border
+			let startAngle = CGFloat.pi / 2  // 12 o'clock (CG coords: +Y is up)
+
+			// Detect menu bar appearance
+			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			let bgGray: CGFloat = isDark ? 0.35 : 0.78
+
+			// --- Background: light gray arc for time remaining ---
+			let timeAngle = startAngle - CGFloat(timeRemaining) * 2 * .pi
+			ctx.setFillColor(CGColor(gray: bgGray, alpha: 0.6))
+			ctx.move(to: center)
+			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
+					   endAngle: timeAngle, clockwise: true)
+			ctx.closePath()
+			ctx.fillPath()
+
+			// --- Colored wedge: usage % of the full circle ---
+			let usageAngle = startAngle - CGFloat(usage) * 2 * .pi
+			ctx.setFillColor(color.cgColor)
+			ctx.move(to: center)
+			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
+					   endAngle: usageAngle, clockwise: true)
+			ctx.closePath()
+			ctx.fillPath()
+
+			// --- Border ring in pace color ---
+			ctx.setStrokeColor(color.cgColor)
+			ctx.setLineWidth(1.2)
+			ctx.addEllipse(in: CGRect(x: 1, y: 1, width: size - 2, height: size - 2))
+			ctx.strokePath()
+		}
+		img.unlockFocus()
+		return img
+	}
 }
 
 // MARK: - Status Bar Controller
@@ -581,6 +631,10 @@ class StatusBarController: NSObject {
 
 		if Prefs.load().displayPercentsInMenubar {
 			statusItem.button?.attributedTitle = str
+		} else {
+			// Pie chart mode
+			statusItem.button?.image = buildPieImage(usage: usage)
+			statusItem.button?.image?.isTemplate = false
 		}
 
 		// Tooltip
@@ -740,11 +794,57 @@ class StatusBarController: NSObject {
 			button.image = nil
 			button.imagePosition = .noImage
 		} else {
+			// Will be set to pie charts by render(), robot as placeholder
 			button.image = MenuBarIcon.robot()
 			button.image?.isTemplate = true
 			button.imagePosition = .imageOnly
 			button.attributedTitle = NSAttributedString(string: "")
 		}
+	}
+
+	/// Build a combined image with two pie charts side by side
+	private func buildPieImage(usage: UsageAPIResponse) -> NSImage {
+		let daily = PaceCalculator.calculate(
+			utilization: usage.fiveHour.utilization,
+			resetsAt: usage.fiveHour.resetsAt,
+			windowHours: 5.0
+		)
+		let weekly = PaceCalculator.calculate(
+			utilization: usage.sevenDay.utilization,
+			resetsAt: usage.sevenDay.resetsAt,
+			windowHours: 168.0
+		)
+
+		let dTimeLeft = PaceCalculator.timeRemainingFraction(
+			resetsAt: usage.fiveHour.resetsAt, windowHours: 5.0
+		)
+		let wTimeLeft = PaceCalculator.timeRemainingFraction(
+			resetsAt: usage.sevenDay.resetsAt, windowHours: 168.0
+		)
+
+		let pieSize: CGFloat = 16
+		let gap: CGFloat = 3
+		let totalWidth = pieSize * 2 + gap
+
+		let dPie = MenuBarIcon.usagePie(
+			timeRemaining: dTimeLeft,
+			usage: usage.fiveHour.utilization / 100,
+			color: daily.color,
+			size: pieSize
+		)
+		let wPie = MenuBarIcon.usagePie(
+			timeRemaining: wTimeLeft,
+			usage: usage.sevenDay.utilization / 100,
+			color: weekly.color,
+			size: pieSize
+		)
+
+		let combined = NSImage(size: NSSize(width: totalWidth, height: pieSize))
+		combined.lockFocus()
+		dPie.draw(at: NSPoint(x: 0, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+		wPie.draw(at: NSPoint(x: pieSize + gap, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+		combined.unlockFocus()
+		return combined
 	}
 
 	@objc private func togglePercents() {
@@ -757,7 +857,7 @@ class StatusBarController: NSObject {
 
 		applyMenuBarMode()
 
-		if let usage = lastUsage, prefs.displayPercentsInMenubar {
+		if let usage = lastUsage {
 			render(usage)
 		}
 	}
