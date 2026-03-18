@@ -688,8 +688,8 @@ enum MenuBarIcon {
 			ctx.clip(to: CGRect(x: 0, y: barH, width: w, height: h))
 
 			// Needle shadow
-			ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.3))
-			ctx.setLineWidth(2.5)
+			ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.5))
+			ctx.setLineWidth(3.5)
 			ctx.setLineCap(.round)
 			ctx.move(to: center)
 			ctx.addLine(to: needleTip)
@@ -697,7 +697,7 @@ enum MenuBarIcon {
 
 			// Needle
 			ctx.setStrokeColor(color.cgColor)
-			ctx.setLineWidth(2.0)
+			ctx.setLineWidth(2.5)
 			ctx.setLineCap(.round)
 			ctx.move(to: center)
 			ctx.addLine(to: needleTip)
