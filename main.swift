@@ -467,6 +467,12 @@ class StatusBarController: NSObject {
 	private var lastUsage: UsageAPIResponse?
 
 	private let menuFont = NSFont.monospacedDigitSystemFont(ofSize: 14, weight: .medium)
+	private let timeFmt: DateFormatter = {
+		let f = DateFormatter()
+		f.dateFormat = "h:mm a"
+		f.timeZone = TimeZone(identifier: "America/Los_Angeles")
+		return f
+	}()
 
 	override init() {
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -517,12 +523,13 @@ class StatusBarController: NSObject {
 		cookieAge.isHidden = true
 		menu.addItem(cookieAge)
 
-		let refresh = NSMenuItem(
-			title: "Refresh Now", action: #selector(doRefresh), keyEquivalent: "u"
+		let updated = NSMenuItem(
+			title: "Updated: --", action: #selector(doRefresh), keyEquivalent: "u"
 		)
-		refresh.keyEquivalentModifierMask = .command
-		refresh.target = self
-		menu.addItem(refresh)
+		updated.keyEquivalentModifierMask = .command
+		updated.target = self
+		updated.tag = 104
+		menu.addItem(updated)
 
 		menu.addItem(.separator())
 
@@ -624,6 +631,9 @@ class StatusBarController: NSObject {
 				sonnetItem.isHidden = true
 			}
 		}
+
+		// Last updated timestamp (tag 104) — clickable to refresh
+		statusItem.menu?.item(withTag: 104)?.title = "Updated: \(timeFmt.string(from: Date()))"
 
 		// Cookie age menu item
 		updateCookieAgeItem()
