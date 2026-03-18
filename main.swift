@@ -606,12 +606,12 @@ enum MenuBarIcon {
 			let sweep = startRad - endRad     // π
 
 			// Zone boundaries on the dial (fixed positions):
-			// Green:  9:00–11:00 = 0.000–0.333 of sweep
-			// Yellow: 11:00–1:00 = 0.333–0.667 of sweep
-			// Red:    1:00–3:00  = 0.667–1.000 of sweep
+			// Green:  9:00–11:30 = 0.000–0.417 of sweep
+			// Yellow: 11:30–12:30 = 0.417–0.583 of sweep
+			// Red:    12:30–3:00 = 0.583–1.000 of sweep
 			let center = CGPoint(x: centerX, y: centerY)
-			let greenEnd = startRad - sweep * 0.333
-			let yellowEnd = startRad - sweep * 0.667
+			let greenEnd = startRad - sweep * 0.417
+			let yellowEnd = startRad - sweep * 0.583
 
 			// --- Faint colored zone wedges ---
 			ctx.setFillColor(PaceColors.green.withAlphaComponent(0.20).cgColor)
@@ -645,11 +645,11 @@ enum MenuBarIcon {
 
 			// --- Non-linear needle mapping ---
 			// ratio = usage / pace. Maps to dial positions:
-			//   ratio 0        → 9:30  (0.083 of sweep) — minimum
-			//   ratio yellowAt → 11:00 (0.333) — entering yellow
-			//   ratio redAt    → 1:00  (0.667) — entering red
+			//   ratio 0        → ~9:10 (needleMin) — minimum
+			//   ratio yellowAt → 11:30 (0.417) — entering yellow
+			//   ratio redAt    → 12:30 (0.583) — entering red
 			//   ratio 1.0      → 2:00  (0.833) — at pace exactly
-			//   ratio >1.0     → 2:00–3:00 (0.833–1.0) — over pace
+			//   ratio >1.0     → 2:00–2:50 (0.833–needleMax) — over pace
 			let pace = elapsed  // fraction elapsed = pace fraction
 			let ratio = pace > 0 ? min(usage / pace, 1.5) : min(usage * 10, 1.5)
 			let yellowAt = prefs.yellowAtPace
@@ -663,14 +663,14 @@ enum MenuBarIcon {
 			if ratio <= 0 {
 				needleFrac = needleMin
 			} else if ratio <= yellowAt {
-				// 0 → yellowAt maps to needleMin → 0.333
-				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.333 - needleMin)
+				// 0 → yellowAt maps to needleMin → 0.417
+				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.417 - needleMin)
 			} else if ratio <= redAt {
-				// yellowAt → redAt maps to 0.333 → 0.667
-				needleFrac = 0.333 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.667 - 0.333)
+				// yellowAt → redAt maps to 0.417 → 0.583
+				needleFrac = 0.417 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.583 - 0.417)
 			} else if ratio <= 1.0 {
-				// redAt → 1.0 maps to 0.667 → 0.833
-				needleFrac = 0.667 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.667)
+				// redAt → 1.0 maps to 0.583 → 0.833
+				needleFrac = 0.583 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.583)
 			} else {
 				// 1.0+ → 0.833 → needleMax (over pace)
 				needleFrac = 0.833 + CGFloat(min((ratio - 1.0) / 0.5, 1.0)) * (needleMax - 0.833)
