@@ -579,6 +579,122 @@ enum MenuBarIcon {
 		img.unlockFocus()
 		return img
 	}
+
+	/// Fuel gauge for menu bar.
+	/// - elapsed: 0–1, fraction of window elapsed
+	/// - usage: 0–1, fraction of limit used
+	/// - color: pace color for the needle
+	static func gauge(elapsed: Double, usage: Double, color: NSColor, size: CGFloat = 28) -> NSImage {
+		let w = size
+		let h = size * 0.75 // wider than tall — half-circle + bar
+		let img = NSImage(size: NSSize(width: w, height: h))
+		img.lockFocus()
+		if let ctx = NSGraphicsContext.current?.cgContext {
+			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
+			let prefs = Prefs.load()
+
+			let centerX = w / 2
+			let barH: CGFloat = 3
+			let arcBottom = barH + 2
+			let centerY = arcBottom
+			let radius = (w - 4) / 2
+
+			// Arc sweep: 210 degrees, from 195° (7 o'clock) to -15° (5 o'clock)
+			// In CG: angles measured from +X axis, counterclockwise positive
+			let startDeg: CGFloat = 195  // 7 o'clock
+			let endDeg: CGFloat = -15    // 5 o'clock
+			let sweepDeg: CGFloat = startDeg - endDeg // 210°
+			let startRad = startDeg * .pi / 180
+			let endRad = endDeg * .pi / 180
+
+			// --- Faint colored zone arcs ---
+			let zoneWidth: CGFloat = 4.0
+			let greenColor = PaceColors.green.withAlphaComponent(0.2)
+			let yellowColor = PaceColors.yellow.withAlphaComponent(0.2)
+			let redColor = PaceColors.red.withAlphaComponent(0.2)
+
+			// Green: left third (0–33% of sweep)
+			let greenEnd = startRad - (sweepDeg * 0.40) * .pi / 180
+			ctx.setStrokeColor(greenColor.cgColor)
+			ctx.setLineWidth(zoneWidth)
+			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+					   startAngle: startRad, endAngle: greenEnd, clockwise: true)
+			ctx.strokePath()
+
+			// Yellow: middle third (33–66% of sweep)
+			let yellowEnd = startRad - (sweepDeg * 0.75) * .pi / 180
+			ctx.setStrokeColor(yellowColor.cgColor)
+			ctx.setLineWidth(zoneWidth)
+			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
+			ctx.strokePath()
+
+			// Red: right third (66–100% of sweep)
+			ctx.setStrokeColor(redColor.cgColor)
+			ctx.setLineWidth(zoneWidth)
+			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+					   startAngle: yellowEnd, endAngle: endRad, clockwise: true)
+			ctx.strokePath()
+
+			// --- Thin arc outline ---
+			let outlineColor: CGFloat = isDark ? 0.4 : 0.65
+			ctx.setStrokeColor(CGColor(gray: outlineColor, alpha: 0.5))
+			ctx.setLineWidth(0.8)
+			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+					   startAngle: startRad, endAngle: endRad, clockwise: true)
+			ctx.strokePath()
+
+			// --- Needle: usage position ---
+			// 0% usage = startAngle (far left), 100% = endAngle (far right)
+			// Straight up (90°) should be ~at pace (usage == elapsed)
+			// Map usage 0–1 to the sweep
+			let clampedUsage = min(1.0, max(0.0, usage))
+			let needleAngle = startRad - CGFloat(clampedUsage) * (startRad - endRad)
+			let needleLen = radius - 2
+			let needleTip = CGPoint(
+				x: centerX + needleLen * cos(needleAngle),
+				y: centerY + needleLen * sin(needleAngle)
+			)
+
+			// Needle shadow
+			ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.3))
+			ctx.setLineWidth(2.5)
+			ctx.setLineCap(.round)
+			ctx.move(to: CGPoint(x: centerX, y: centerY))
+			ctx.addLine(to: needleTip)
+			ctx.strokePath()
+
+			// Needle
+			ctx.setStrokeColor(color.cgColor)
+			ctx.setLineWidth(2.0)
+			ctx.setLineCap(.round)
+			ctx.move(to: CGPoint(x: centerX, y: centerY))
+			ctx.addLine(to: needleTip)
+			ctx.strokePath()
+
+			// Center dot
+			let dotR: CGFloat = 2.5
+			ctx.setFillColor(color.cgColor)
+			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR, width: dotR * 2, height: dotR * 2))
+
+			// --- Bottom bar: time elapsed ---
+			let barY: CGFloat = 0
+			let barInset: CGFloat = 2
+			let barWidth = w - barInset * 2
+			let filledWidth = barWidth * CGFloat(min(1, max(0, elapsed)))
+
+			// Bar background
+			ctx.setFillColor(CGColor(gray: isDark ? 0.3 : 0.75, alpha: 0.4))
+			ctx.fill(CGRect(x: barInset, y: barY, width: barWidth, height: barH))
+
+			// Bar fill
+			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
+			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
+			ctx.fill(CGRect(x: barInset, y: barY, width: filledWidth, height: barH))
+		}
+		img.unlockFocus()
+		return img
+	}
 }
 
 // MARK: - Status Bar Controller
@@ -728,6 +844,11 @@ class StatusBarController: NSObject {
 			statusItem.button?.title = ""
 			statusItem.button?.attributedTitle = NSAttributedString(string: "")
 			statusItem.button?.image = buildPieImage(usage: usage)
+			statusItem.button?.image?.isTemplate = false
+		case "gauges":
+			statusItem.button?.title = ""
+			statusItem.button?.attributedTitle = NSAttributedString(string: "")
+			statusItem.button?.image = buildGaugeImage(usage: usage)
 			statusItem.button?.image?.isTemplate = false
 		default: // "icon" — robot colored by worst pace
 			let isRed = daily.color == PaceColors.red || weekly.color == PaceColors.red
@@ -902,8 +1023,8 @@ class StatusBarController: NSObject {
 		case "percentages":
 			button.image = nil
 			button.imagePosition = .noImage
-		case "pies":
-			// Pie images set by render(), robot as placeholder until first poll
+		case "pies", "gauges":
+			// Images set by render(), robot as placeholder until first poll
 			button.image = MenuBarIcon.robot()
 			button.imagePosition = .imageOnly
 			button.attributedTitle = NSAttributedString(string: "")
@@ -966,8 +1087,57 @@ class StatusBarController: NSObject {
 		return combined
 	}
 
-	static let displayModes = ["percentages", "pies", "icon"]
-	static let displayLabels = ["Percentages", "Pies", "Icon"]
+	/// Build a combined image with two fuel gauges side by side
+	private func buildGaugeImage(usage: UsageAPIResponse) -> NSImage {
+		let daily = PaceCalculator.calculate(
+			utilization: usage.fiveHour.utilization,
+			resetsAt: usage.fiveHour.resetsAt,
+			windowHours: 5.0
+		)
+		let weekly = PaceCalculator.calculate(
+			utilization: usage.sevenDay.utilization,
+			resetsAt: usage.sevenDay.resetsAt,
+			windowHours: 168.0
+		)
+
+		let dElapsed = 1.0 - PaceCalculator.timeRemainingFraction(
+			resetsAt: usage.fiveHour.resetsAt, windowHours: 5.0
+		)
+		let wElapsed = 1.0 - PaceCalculator.timeRemainingFraction(
+			resetsAt: usage.sevenDay.resetsAt, windowHours: 168.0
+		)
+
+		let prefs = Prefs.load()
+		let gaugeW: CGFloat = CGFloat(prefs.pieSize) // reuse pieSize for gauge width
+		let gaugeH = gaugeW * 0.75
+		let gap: CGFloat = CGFloat(prefs.pieGap)
+		let padL: CGFloat = CGFloat(prefs.piePadLeft)
+		let padR: CGFloat = CGFloat(prefs.piePadRight)
+		let totalWidth = padL + gaugeW * 2 + gap + padR
+
+		let dGauge = MenuBarIcon.gauge(
+			elapsed: dElapsed,
+			usage: usage.fiveHour.utilization / 100,
+			color: daily.color,
+			size: gaugeW
+		)
+		let wGauge = MenuBarIcon.gauge(
+			elapsed: wElapsed,
+			usage: usage.sevenDay.utilization / 100,
+			color: weekly.color,
+			size: gaugeW
+		)
+
+		let combined = NSImage(size: NSSize(width: totalWidth, height: gaugeH))
+		combined.lockFocus()
+		dGauge.draw(at: NSPoint(x: padL, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+		wGauge.draw(at: NSPoint(x: padL + gaugeW + gap, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+		combined.unlockFocus()
+		return combined
+	}
+
+	static let displayModes = ["percentages", "pies", "gauges", "icon"]
+	static let displayLabels = ["Percentages", "Pies", "Gauges", "Icon"]
 
 	@objc private func setDisplayMode(_ sender: NSMenuItem) {
 		let idx = sender.tag - 200
