@@ -711,7 +711,7 @@ enum MenuBarIcon {
 			ctx.restoreGState()
 
 			// --- Bottom bar: time elapsed with border (match arc inset) ---
-			let barInset: CGFloat = 2
+			let barInset: CGFloat = 1.5
 			let barWidth = w - barInset * 2
 
 			let borderColor = color.blended(withFraction: 0.20, of: .black) ?? color
