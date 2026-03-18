@@ -579,7 +579,10 @@ class UsagePoller {
 				switch http.statusCode {
 				case 401: msg = "Auth failed — update session key"
 				case 403: msg = "Forbidden — check org ID"
-				case 429: msg = "Rate limited"
+				case 429:
+					// Back off — skip next poll cycle
+					NSLog("UsagePoller: rate limited, will retry next cycle")
+					return
 				default: msg = "HTTP \(http.statusCode)"
 				}
 				DispatchQueue.main.async { self?.onError?(msg) }
