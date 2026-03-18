@@ -398,6 +398,67 @@ class UsagePoller {
 	}
 }
 
+// MARK: - Menu Bar Icon
+
+enum MenuBarIcon {
+	/// Claude-inspired sparkle icon for menu bar (18x18 template)
+	static func sparkle() -> NSImage {
+		let size: CGFloat = 18
+		let img = NSImage(size: NSSize(width: size, height: size))
+		img.lockFocus()
+		if let ctx = NSGraphicsContext.current?.cgContext {
+			ctx.setFillColor(CGColor(gray: 1, alpha: 1))
+
+			let cx = size / 2
+			let cy = size / 2
+
+			// Four-pointed sparkle with curved sides
+			// Each point is a diamond-ish petal drawn with bezier curves
+			let outer: CGFloat = 7.5   // tip distance from center
+			let inner: CGFloat = 2.2   // waist width (how pinched)
+			let ctrl: CGFloat = 1.0    // control point offset (curves the sides)
+
+			let path = NSBezierPath()
+
+			// Top point
+			path.move(to: NSPoint(x: cx, y: cy + outer))
+			path.curve(to: NSPoint(x: cx + inner, y: cy),
+					   controlPoint1: NSPoint(x: cx + ctrl, y: cy + outer * 0.45),
+					   controlPoint2: NSPoint(x: cx + inner, y: cy + ctrl))
+			// Right point
+			path.curve(to: NSPoint(x: cx + outer, y: cy),
+					   controlPoint1: NSPoint(x: cx + inner, y: cy + ctrl * 0.5),
+					   controlPoint2: NSPoint(x: cx + outer * 0.45, y: cy + ctrl * 0.3))
+			path.curve(to: NSPoint(x: cx + inner, y: cy),
+					   controlPoint1: NSPoint(x: cx + outer * 0.45, y: cy - ctrl * 0.3),
+					   controlPoint2: NSPoint(x: cx + inner, y: cy - ctrl * 0.5))
+			// Bottom point
+			path.curve(to: NSPoint(x: cx, y: cy - outer),
+					   controlPoint1: NSPoint(x: cx + inner, y: cy - ctrl),
+					   controlPoint2: NSPoint(x: cx + ctrl, y: cy - outer * 0.45))
+			path.curve(to: NSPoint(x: cx - inner, y: cy),
+					   controlPoint1: NSPoint(x: cx - ctrl, y: cy - outer * 0.45),
+					   controlPoint2: NSPoint(x: cx - inner, y: cy - ctrl))
+			// Left point
+			path.curve(to: NSPoint(x: cx - outer, y: cy),
+					   controlPoint1: NSPoint(x: cx - inner, y: cy - ctrl * 0.5),
+					   controlPoint2: NSPoint(x: cx - outer * 0.45, y: cy - ctrl * 0.3))
+			path.curve(to: NSPoint(x: cx - inner, y: cy),
+					   controlPoint1: NSPoint(x: cx - outer * 0.45, y: cy + ctrl * 0.3),
+					   controlPoint2: NSPoint(x: cx - inner, y: cy + ctrl * 0.5))
+			// Back to top
+			path.curve(to: NSPoint(x: cx, y: cy + outer),
+					   controlPoint1: NSPoint(x: cx - inner, y: cy + ctrl),
+					   controlPoint2: NSPoint(x: cx - ctrl, y: cy + outer * 0.45))
+
+			path.fill()
+		}
+		img.unlockFocus()
+		img.isTemplate = true
+		return img
+	}
+}
+
 // MARK: - Status Bar Controller
 
 class StatusBarController: NSObject {
@@ -410,6 +471,11 @@ class StatusBarController: NSObject {
 	override init() {
 		statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 		super.init()
+
+		if let button = statusItem.button {
+			button.image = MenuBarIcon.sparkle()
+			button.imagePosition = .imageLeading
+		}
 
 		buildMenu()
 		statusItem.button?.title = "..."
@@ -495,9 +561,7 @@ class StatusBarController: NSObject {
 		]
 		let str = NSMutableAttributedString()
 
-		str.append(NSAttributedString(string: "\u{1F916} ", attributes: base))
-
-		str.append(NSAttributedString(string: "D", attributes: base))
+		str.append(NSAttributedString(string: " D", attributes: base))
 		str.append(colored("\(daily.percentage)%", daily.color, base))
 
 		str.append(NSAttributedString(string: " ", attributes: base))
