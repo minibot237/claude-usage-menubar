@@ -586,24 +586,22 @@ enum MenuBarIcon {
 	/// - color: pace color for the needle
 	static func gauge(elapsed: Double, usage: Double, color: NSColor, size: CGFloat = 28) -> NSImage {
 		let w = size
-		let h = size * 0.75 // wider than tall — half-circle + bar
+		let barH: CGFloat = 4 // 1px border top/bottom + 2px fill
+		let h = size * 0.65 + barH + 2 // arc + gap + bar
 		let img = NSImage(size: NSSize(width: w, height: h))
 		img.lockFocus()
 		if let ctx = NSGraphicsContext.current?.cgContext {
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-			let prefs = Prefs.load()
 
 			let centerX = w / 2
-			let barH: CGFloat = 3
-			let arcBottom = barH + 2
-			let centerY = arcBottom
+			let centerY = barH + 3
 			let radius = (w - 4) / 2
 
-			// Arc sweep: 210 degrees, from 195° (7 o'clock) to -15° (5 o'clock)
-			// In CG: angles measured from +X axis, counterclockwise positive
-			let startDeg: CGFloat = 195  // 7 o'clock
-			let endDeg: CGFloat = -15    // 5 o'clock
-			let sweepDeg: CGFloat = startDeg - endDeg // 210°
+			// Arc sweep: 162° (90% of 180°), symmetric around vertical
+			// From 171° to 9° — leaves a small gap at the bottom
+			let startDeg: CGFloat = 171
+			let endDeg: CGFloat = 9
+			let sweepDeg: CGFloat = startDeg - endDeg // 162°
 			let startRad = startDeg * .pi / 180
 			let endRad = endDeg * .pi / 180
 
@@ -613,7 +611,7 @@ enum MenuBarIcon {
 			let yellowColor = PaceColors.yellow.withAlphaComponent(0.2)
 			let redColor = PaceColors.red.withAlphaComponent(0.2)
 
-			// Green: left third (0–33% of sweep)
+			// Green: 0–40% of sweep
 			let greenEnd = startRad - (sweepDeg * 0.40) * .pi / 180
 			ctx.setStrokeColor(greenColor.cgColor)
 			ctx.setLineWidth(zoneWidth)
@@ -621,7 +619,7 @@ enum MenuBarIcon {
 					   startAngle: startRad, endAngle: greenEnd, clockwise: true)
 			ctx.strokePath()
 
-			// Yellow: middle third (33–66% of sweep)
+			// Yellow: 40–75% of sweep
 			let yellowEnd = startRad - (sweepDeg * 0.75) * .pi / 180
 			ctx.setStrokeColor(yellowColor.cgColor)
 			ctx.setLineWidth(zoneWidth)
@@ -629,7 +627,7 @@ enum MenuBarIcon {
 					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
 			ctx.strokePath()
 
-			// Red: right third (66–100% of sweep)
+			// Red: 75–100% of sweep
 			ctx.setStrokeColor(redColor.cgColor)
 			ctx.setLineWidth(zoneWidth)
 			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
@@ -644,10 +642,7 @@ enum MenuBarIcon {
 					   startAngle: startRad, endAngle: endRad, clockwise: true)
 			ctx.strokePath()
 
-			// --- Needle: usage position ---
-			// 0% usage = startAngle (far left), 100% = endAngle (far right)
-			// Straight up (90°) should be ~at pace (usage == elapsed)
-			// Map usage 0–1 to the sweep
+			// --- Needle ---
 			let clampedUsage = min(1.0, max(0.0, usage))
 			let needleAngle = startRad - CGFloat(clampedUsage) * (startRad - endRad)
 			let needleLen = radius - 2
@@ -677,20 +672,21 @@ enum MenuBarIcon {
 			ctx.setFillColor(color.cgColor)
 			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR, width: dotR * 2, height: dotR * 2))
 
-			// --- Bottom bar: time elapsed ---
-			let barY: CGFloat = 0
+			// --- Bottom bar: time elapsed with border ---
 			let barInset: CGFloat = 2
 			let barWidth = w - barInset * 2
-			let filledWidth = barWidth * CGFloat(min(1, max(0, elapsed)))
 
-			// Bar background
-			ctx.setFillColor(CGColor(gray: isDark ? 0.3 : 0.75, alpha: 0.4))
-			ctx.fill(CGRect(x: barInset, y: barY, width: barWidth, height: barH))
+			// Border (1px stroke around the bar)
+			let borderColor = color.blended(withFraction: 0.20, of: .black) ?? color
+			ctx.setStrokeColor(borderColor.cgColor)
+			ctx.setLineWidth(1.0)
+			ctx.stroke(CGRect(x: barInset, y: 0.5, width: barWidth, height: barH - 1))
 
-			// Bar fill
+			// Fill (2px inside the border)
+			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, elapsed)))
 			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
 			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
-			ctx.fill(CGRect(x: barInset, y: barY, width: filledWidth, height: barH))
+			ctx.fill(CGRect(x: barInset + 1, y: 1, width: filledWidth, height: barH - 2))
 		}
 		img.unlockFocus()
 		return img
