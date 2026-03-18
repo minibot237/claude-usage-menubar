@@ -769,52 +769,6 @@ class StatusBarController: NSObject {
 		}
 
 		poller.start()
-
-		// DEBUG: 5h flirting with yellow/red, 7d green (remove when done)
-		struct DF { let dE: Double; let dU: Double; let wE: Double; let wU: Double; let l: String }
-		let frames: [DF] = [
-			DF(dE: 0.30, dU: 20, wE: 0.76, wU: 40, l: "green"),        // well under pace
-			DF(dE: 0.30, dU: 23, wE: 0.76, wU: 40, l: "approaching"),   // ratio ~0.77 — near yellow
-			DF(dE: 0.30, dU: 25, wE: 0.76, wU: 40, l: "yellow entry"),  // ratio 0.83 — yellow
-			DF(dE: 0.30, dU: 26, wE: 0.76, wU: 40, l: "yellow mid"),    // ratio 0.87
-			DF(dE: 0.30, dU: 27, wE: 0.76, wU: 40, l: "red entry"),     // ratio 0.90 — red
-			DF(dE: 0.30, dU: 29, wE: 0.76, wU: 40, l: "red deep"),      // ratio 0.97
-			DF(dE: 0.30, dU: 32, wE: 0.76, wU: 40, l: "over pace"),     // ratio 1.07
-			DF(dE: 0.30, dU: 38, wE: 0.76, wU: 40, l: "way over"),      // ratio 1.27
-		]
-		var di = 0
-		Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
-			guard let self = self, let usage = self.lastUsage else { return }
-			let f = frames[di]
-			let prefs = Prefs.load()
-
-			func pc(_ u: Double, _ e: Double) -> NSColor {
-				let pace = e; let r = pace > 0 ? u / (pace * 100) : 0
-				if r >= prefs.redAtPace { return PaceColors.red }
-				if r >= prefs.yellowAtPace { return PaceColors.yellow }
-				return PaceColors.green
-			}
-
-			let gW: CGFloat = 31; let gH: CGFloat = 24
-			let gap = CGFloat(prefs.pieGap); let pL = CGFloat(prefs.piePadLeft); let pR = CGFloat(prefs.piePadRight)
-
-			// 5h: faked
-			let g1 = MenuBarIcon.gauge(elapsed: f.dE, usage: f.dU / 100, color: pc(f.dU, f.dE), width: gW, height: gH)
-			// 7d: real data
-			let wElapsed = 1.0 - PaceCalculator.timeRemainingFraction(resetsAt: usage.sevenDay.resetsAt, windowHours: 168)
-			let wc = PaceCalculator.calculate(utilization: usage.sevenDay.utilization, resetsAt: usage.sevenDay.resetsAt, windowHours: 168)
-			let g2 = MenuBarIcon.gauge(elapsed: wElapsed, usage: usage.sevenDay.utilization / 100, color: wc.color, width: gW, height: gH)
-
-			let combined = NSImage(size: NSSize(width: pL + gW * 2 + gap + pR, height: gH))
-			combined.lockFocus()
-			g1.draw(at: NSPoint(x: pL, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
-			g2.draw(at: NSPoint(x: pL + gW + gap, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
-			combined.unlockFocus()
-			self.statusItem.button?.image = combined
-			self.statusItem.button?.image?.isTemplate = false
-			NSLog("Debug gauge: %@ | ratio=%.2f", f.l, f.dU / (f.dE * 100))
-			di = (di + 1) % frames.count
-		}
 	}
 
 	private func buildMenu() {
