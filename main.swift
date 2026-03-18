@@ -655,12 +655,16 @@ enum MenuBarIcon {
 			let yellowAt = prefs.yellowAtPace
 			let redAt = prefs.redAtPace
 
+			// Min/max needle positions — small margins so needle doesn't sit on the bar
+			let needleMin: CGFloat = 0.04  // ~7° from left edge
+			let needleMax: CGFloat = 0.96  // ~7° from right edge
+
 			let needleFrac: CGFloat
 			if ratio <= 0 {
-				needleFrac = 0.083
+				needleFrac = needleMin
 			} else if ratio <= yellowAt {
-				// 0 → yellowAt maps to 0.083 → 0.333
-				needleFrac = 0.083 + CGFloat(ratio / yellowAt) * (0.333 - 0.083)
+				// 0 → yellowAt maps to needleMin → 0.333
+				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.333 - needleMin)
 			} else if ratio <= redAt {
 				// yellowAt → redAt maps to 0.333 → 0.667
 				needleFrac = 0.333 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.667 - 0.333)
@@ -668,8 +672,8 @@ enum MenuBarIcon {
 				// redAt → 1.0 maps to 0.667 → 0.833
 				needleFrac = 0.667 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.667)
 			} else {
-				// 1.0+ → 0.833 → 1.0 (over pace)
-				needleFrac = 0.833 + CGFloat(min((ratio - 1.0) / 0.5, 1.0)) * (1.0 - 0.833)
+				// 1.0+ → 0.833 → needleMax (over pace)
+				needleFrac = 0.833 + CGFloat(min((ratio - 1.0) / 0.5, 1.0)) * (needleMax - 0.833)
 			}
 
 			let needleAngle = startRad - CGFloat(needleFrac) * sweep
