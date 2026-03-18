@@ -621,7 +621,7 @@ enum MenuBarIcon {
 			ctx.closePath()
 			ctx.fillPath()
 
-			ctx.setFillColor(PaceColors.yellow.withAlphaComponent(0.20).cgColor)
+			ctx.setFillColor(PaceColors.yellow.withAlphaComponent(0.28).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
