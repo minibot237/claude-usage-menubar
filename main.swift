@@ -768,7 +768,7 @@ enum MenuBarIcon {
 	static func gauge(elapsed: Double, usage: Double, color: NSColor,
 					  width: CGFloat = 31, height: CGFloat = 24) -> NSImage {
 		let w = width
-		let barH: CGFloat = 5 // 1px border + 3px fill + 1px border
+		let barH: CGFloat = 4 // 1px border + 2px fill + 1px border
 		let h = height
 		let img = NSImage(size: NSSize(width: w, height: h))
 		img.lockFocus()
@@ -1613,12 +1613,13 @@ func showSetupDialog(requireKey: Bool = false) {
 	authLabel.font = NSFont.systemFont(ofSize: 11)
 	container.addSubview(authLabel)
 
-	let browserBtn = NSButton(frame: NSRect(x: 290, y: y, width: 126, height: 22))
-	browserBtn.title = "Browser Sign In"
-	browserBtn.bezelStyle = .inline
-	browserBtn.target = BrowserSignInAction.shared
-	browserBtn.action = #selector(BrowserSignInAction.doSignIn)
-	container.addSubview(browserBtn)
+	// Browser Sign In — disabled until WKWebView auth is fixed
+	// let browserBtn = NSButton(frame: NSRect(x: 290, y: y, width: 126, height: 22))
+	// browserBtn.title = "Browser Sign In"
+	// browserBtn.bezelStyle = .inline
+	// browserBtn.target = BrowserSignInAction.shared
+	// browserBtn.action = #selector(BrowserSignInAction.doSignIn)
+	// container.addSubview(browserBtn)
 
 	// --- Divider ---
 	y -= 12
