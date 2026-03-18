@@ -597,7 +597,7 @@ enum MenuBarIcon {
 			let prefs = Prefs.load()
 
 			let centerX = w / 2
-			let centerY = barH + 0.5
+			let centerY = barH - 0.5
 			let radius = (w - 4) / 2
 
 			// 180° sweep: 9 o'clock (180°) to 3 o'clock (0°)
@@ -606,12 +606,12 @@ enum MenuBarIcon {
 			let sweep = startRad - endRad     // π
 
 			// Zone boundaries on the dial (fixed positions):
-			// Green:  9:00–11:30 = 0.000–0.417 of sweep
-			// Yellow: 11:30–12:30 = 0.417–0.583 of sweep
-			// Red:    12:30–3:00 = 0.583–1.000 of sweep
+			// Green:  9:00–11:18 = 0.000–0.389 of sweep
+			// Yellow: 11:18–12:42 = 0.389–0.611 of sweep
+			// Red:    12:42–3:00 = 0.611–1.000 of sweep
 			let center = CGPoint(x: centerX, y: centerY)
-			let greenEnd = startRad - sweep * 0.417
-			let yellowEnd = startRad - sweep * 0.583
+			let greenEnd = startRad - sweep * 0.389
+			let yellowEnd = startRad - sweep * 0.611
 
 			// --- Faint colored zone wedges ---
 			ctx.setFillColor(PaceColors.green.withAlphaComponent(0.20).cgColor)
@@ -636,8 +636,8 @@ enum MenuBarIcon {
 			ctx.fillPath()
 
 			// --- Thin arc outline ---
-			let outlineGray: CGFloat = isDark ? 0.4 : 0.65
-			ctx.setStrokeColor(CGColor(gray: outlineGray, alpha: 0.5))
+			let outlineGray: CGFloat = isDark ? 0.5 : 0.55
+			ctx.setStrokeColor(CGColor(gray: outlineGray, alpha: 0.7))
 			ctx.setLineWidth(0.8)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: startRad, endAngle: endRad, clockwise: true)
@@ -646,8 +646,8 @@ enum MenuBarIcon {
 			// --- Non-linear needle mapping ---
 			// ratio = usage / pace. Maps to dial positions:
 			//   ratio 0        → ~9:10 (needleMin) — minimum
-			//   ratio yellowAt → 11:30 (0.417) — entering yellow
-			//   ratio redAt    → 12:30 (0.583) — entering red
+			//   ratio yellowAt → 11:18 (0.389) — entering yellow
+			//   ratio redAt    → 12:42 (0.611) — entering red
 			//   ratio 1.0      → 2:00  (0.833) — at pace exactly
 			//   ratio >1.0     → 2:00–2:50 (0.833–needleMax) — over pace
 			let pace = elapsed  // fraction elapsed = pace fraction
@@ -663,14 +663,14 @@ enum MenuBarIcon {
 			if ratio <= 0 {
 				needleFrac = needleMin
 			} else if ratio <= yellowAt {
-				// 0 → yellowAt maps to needleMin → 0.417
-				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.417 - needleMin)
+				// 0 → yellowAt maps to needleMin → 0.389
+				needleFrac = needleMin + CGFloat(ratio / yellowAt) * (0.389 - needleMin)
 			} else if ratio <= redAt {
-				// yellowAt → redAt maps to 0.417 → 0.583
-				needleFrac = 0.417 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.583 - 0.417)
+				// yellowAt → redAt maps to 0.389 → 0.611
+				needleFrac = 0.389 + CGFloat((ratio - yellowAt) / (redAt - yellowAt)) * (0.611 - 0.389)
 			} else if ratio <= 1.0 {
-				// redAt → 1.0 maps to 0.583 → 0.833
-				needleFrac = 0.583 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.583)
+				// redAt → 1.0 maps to 0.611 → 0.833
+				needleFrac = 0.611 + CGFloat((ratio - redAt) / (1.0 - redAt)) * (0.833 - 0.611)
 			} else {
 				// 1.0+ → 0.833 → needleMax (over pace)
 				needleFrac = 0.833 + CGFloat(min((ratio - 1.0) / 0.5, 1.0)) * (needleMax - 0.833)
@@ -767,6 +767,52 @@ class StatusBarController: NSObject {
 		}
 
 		poller.start()
+
+		// DEBUG: 5h flirting with yellow/red, 7d green (remove when done)
+		struct DF { let dE: Double; let dU: Double; let wE: Double; let wU: Double; let l: String }
+		let frames: [DF] = [
+			DF(dE: 0.30, dU: 20, wE: 0.76, wU: 40, l: "green"),        // well under pace
+			DF(dE: 0.30, dU: 23, wE: 0.76, wU: 40, l: "approaching"),   // ratio ~0.77 — near yellow
+			DF(dE: 0.30, dU: 25, wE: 0.76, wU: 40, l: "yellow entry"),  // ratio 0.83 — yellow
+			DF(dE: 0.30, dU: 26, wE: 0.76, wU: 40, l: "yellow mid"),    // ratio 0.87
+			DF(dE: 0.30, dU: 27, wE: 0.76, wU: 40, l: "red entry"),     // ratio 0.90 — red
+			DF(dE: 0.30, dU: 29, wE: 0.76, wU: 40, l: "red deep"),      // ratio 0.97
+			DF(dE: 0.30, dU: 32, wE: 0.76, wU: 40, l: "over pace"),     // ratio 1.07
+			DF(dE: 0.30, dU: 38, wE: 0.76, wU: 40, l: "way over"),      // ratio 1.27
+		]
+		var di = 0
+		Timer.scheduledTimer(withTimeInterval: 3, repeats: true) { [weak self] _ in
+			guard let self = self, let usage = self.lastUsage else { return }
+			let f = frames[di]
+			let prefs = Prefs.load()
+
+			func pc(_ u: Double, _ e: Double) -> NSColor {
+				let pace = e; let r = pace > 0 ? u / (pace * 100) : 0
+				if r >= prefs.redAtPace { return PaceColors.red }
+				if r >= prefs.yellowAtPace { return PaceColors.yellow }
+				return PaceColors.green
+			}
+
+			let gW: CGFloat = 31; let gH: CGFloat = 24
+			let gap = CGFloat(prefs.pieGap); let pL = CGFloat(prefs.piePadLeft); let pR = CGFloat(prefs.piePadRight)
+
+			// 5h: faked
+			let g1 = MenuBarIcon.gauge(elapsed: f.dE, usage: f.dU / 100, color: pc(f.dU, f.dE), width: gW, height: gH)
+			// 7d: real data
+			let wElapsed = 1.0 - PaceCalculator.timeRemainingFraction(resetsAt: usage.sevenDay.resetsAt, windowHours: 168)
+			let wc = PaceCalculator.calculate(utilization: usage.sevenDay.utilization, resetsAt: usage.sevenDay.resetsAt, windowHours: 168)
+			let g2 = MenuBarIcon.gauge(elapsed: wElapsed, usage: usage.sevenDay.utilization / 100, color: wc.color, width: gW, height: gH)
+
+			let combined = NSImage(size: NSSize(width: pL + gW * 2 + gap + pR, height: gH))
+			combined.lockFocus()
+			g1.draw(at: NSPoint(x: pL, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+			g2.draw(at: NSPoint(x: pL + gW + gap, y: 0), from: .zero, operation: .sourceOver, fraction: 1.0)
+			combined.unlockFocus()
+			self.statusItem.button?.image = combined
+			self.statusItem.button?.image?.isTemplate = false
+			NSLog("Debug gauge: %@ | ratio=%.2f", f.l, f.dU / (f.dE * 100))
+			di = (di + 1) % frames.count
+		}
 	}
 
 	private func buildMenu() {
