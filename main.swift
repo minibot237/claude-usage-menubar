@@ -836,7 +836,7 @@ class StatusBarController: NSObject {
 			resetsAt: usage.sevenDay.resetsAt, windowHours: 168.0
 		)
 
-		let pieSize: CGFloat = 16
+		let pieSize: CGFloat = 18
 		let gap: CGFloat = 3
 		let totalWidth = pieSize * 2 + gap
 
