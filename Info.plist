@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleIdentifier</key>
-	<string>com.minibot.claude-usage</string>
+	<string>com.minibot237.claude-usage-menu</string>
 	<key>CFBundleName</key>
 	<string>Claude Usage</string>
 	<key>CFBundleDisplayName</key>
