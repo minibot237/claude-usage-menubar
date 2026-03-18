@@ -3,7 +3,7 @@ import Cocoa
 // MARK: - Configuration
 
 enum Config {
-	static let pollInterval: TimeInterval = 300
+	static let pollInterval: TimeInterval = 60
 	static let paceThreshold: Double = 20.0
 	static let baseURL = "https://claude.ai/api"
 	static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
