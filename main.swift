@@ -681,12 +681,12 @@ class StatusBarController: NSObject {
 		]
 		let str = NSMutableAttributedString()
 
-		str.append(NSAttributedString(string: " D", attributes: base))
+		str.append(NSAttributedString(string: " D:", attributes: base))
 		str.append(colored("\(daily.percentage)%", daily.color, base))
 
 		str.append(NSAttributedString(string: " ", attributes: base))
 
-		str.append(NSAttributedString(string: "W", attributes: base))
+		str.append(NSAttributedString(string: "W:", attributes: base))
 		str.append(colored("\(weekly.percentage)%", weekly.color, base))
 
 		// Cookie expiry warning in menu bar
