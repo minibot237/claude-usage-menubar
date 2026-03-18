@@ -614,21 +614,21 @@ enum MenuBarIcon {
 			let yellowEnd = startRad - sweep * 0.611
 
 			// --- Faint colored zone wedges ---
-			ctx.setFillColor(PaceColors.green.withAlphaComponent(0.20).cgColor)
+			ctx.setFillColor(PaceColors.green.withAlphaComponent(0.40).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: startRad, endAngle: greenEnd, clockwise: true)
 			ctx.closePath()
 			ctx.fillPath()
 
-			ctx.setFillColor(PaceColors.yellow.withAlphaComponent(0.28).cgColor)
+			ctx.setFillColor(PaceColors.yellow.withAlphaComponent(0.40).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
 			ctx.closePath()
 			ctx.fillPath()
 
-			ctx.setFillColor(PaceColors.red.withAlphaComponent(0.20).cgColor)
+			ctx.setFillColor(PaceColors.red.withAlphaComponent(0.40).cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius,
 					   startAngle: yellowEnd, endAngle: endRad, clockwise: true)
