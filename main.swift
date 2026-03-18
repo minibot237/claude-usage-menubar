@@ -59,10 +59,11 @@ struct Prefs: Codable {
 	var pieGap: Int = 5
 	var piePadLeft: Int = 8
 	var piePadRight: Int = 6
-	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
-	var colorGreen: String = "#23BF5F"
-	var colorYellow: String = "#FFD700"
-	var colorRed: String = "#F04545"
+	var yellowAtPace: Double = 0.80  // go yellow when usage reaches this fraction of pace
+	var redAtPace: Double = 0.90     // go red when usage reaches this fraction of pace
+	var colorGreen: String = "#5CD88A"
+	var colorYellow: String = "#F0DC5A"
+	var colorRed: String = "#FF2D2D"
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
@@ -273,27 +274,25 @@ enum PaceCalculator {
 		resetsAt: String?,
 		windowHours: Double
 	) -> PaceResult {
-		let yellowBand = Prefs.load().paceYellowBand
+		let prefs = Prefs.load()
 		let usagePercent = utilization
 		let pct = Int(round(usagePercent))
 
 		guard let resetsAt = resetsAt,
 			  let resetDate = parseISO8601(resetsAt) else {
-			// No reset time — color by absolute usage
-			if usagePercent > 80 {
-				return PaceResult(percentage: pct, color: PaceColors.red)
-			} else if usagePercent > 50 {
-				return PaceResult(percentage: pct, color: PaceColors.yellow)
-			}
+			// No reset time — fall back to absolute thresholds
+			if usagePercent >= 90 { return PaceResult(percentage: pct, color: PaceColors.red) }
+			if usagePercent >= 80 { return PaceResult(percentage: pct, color: PaceColors.yellow) }
 			return PaceResult(percentage: pct, color: PaceColors.green)
 		}
 
 		let pace = computePace(resetDate: resetDate, windowHours: windowHours)
-		let greenCeiling = pace * (1 - yellowBand)
+		let yellowLine = pace * prefs.yellowAtPace
+		let redLine = pace * prefs.redAtPace
 
-		if usagePercent > pace {
+		if usagePercent >= redLine {
 			return PaceResult(percentage: pct, color: PaceColors.red)
-		} else if usagePercent > greenCeiling {
+		} else if usagePercent >= yellowLine {
 			return PaceResult(percentage: pct, color: PaceColors.yellow)
 		} else {
 			return PaceResult(percentage: pct, color: PaceColors.green)
@@ -528,17 +527,27 @@ enum MenuBarIcon {
 			let isDark = NSApp.effectiveAppearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
 			let bgGray: CGFloat = isDark ? 0.35 : 0.78
 
-			// --- Background: light gray arc for time remaining ---
+			// Border: darken green/yellow slightly, keep red bright
+			let isRedColor = color.redComponent > 0.8 && color.greenComponent < 0.4
+			let borderColor = isRedColor
+				? color.blended(withFraction: 0.08, of: .black) ?? color
+				: color.blended(withFraction: 0.20, of: .black) ?? color
+
 			let timeAngle = startAngle - CGFloat(clampedTime) * 2 * .pi
-			ctx.setFillColor(CGColor(gray: bgGray, alpha: 0.6))
+			let usageAngle = startAngle - CGFloat(clampedUsage * clampedTime) * 2 * .pi
+
+			// --- Unused budget: desaturated color from usage end to time boundary ---
+			let fadedColor = color.blended(withFraction: 0.75, of:
+				isDark ? NSColor(white: 0.25, alpha: 1) : NSColor(white: 0.85, alpha: 1)
+			) ?? color.withAlphaComponent(0.25)
+			ctx.setFillColor(fadedColor.cgColor)
 			ctx.move(to: center)
-			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
+			ctx.addArc(center: center, radius: radius, startAngle: usageAngle,
 					   endAngle: timeAngle, clockwise: true)
 			ctx.closePath()
 			ctx.fillPath()
 
-			// --- Colored wedge: usage % of the full circle ---
-			let usageAngle = startAngle - CGFloat(clampedUsage) * 2 * .pi
+			// --- Used budget: full color from noon to usage end ---
 			ctx.setFillColor(color.cgColor)
 			ctx.move(to: center)
 			ctx.addArc(center: center, radius: radius, startAngle: startAngle,
@@ -546,10 +555,23 @@ enum MenuBarIcon {
 			ctx.closePath()
 			ctx.fillPath()
 
-			// --- Border ring: darker shade of pace color ---
-			let borderColor = color.blended(withFraction: 0.4, of: .black) ?? color
+			// --- Stroke lines at noon and at time boundary ---
 			ctx.setStrokeColor(borderColor.cgColor)
-			ctx.setLineWidth(1.4)
+			ctx.setLineWidth(1.0)
+			// Noon line
+			ctx.move(to: center)
+			ctx.addLine(to: CGPoint(x: center.x, y: center.y + radius))
+			ctx.strokePath()
+			// Time boundary line
+			let tx = center.x + radius * cos(timeAngle)
+			let ty = center.y + radius * sin(timeAngle)
+			ctx.move(to: center)
+			ctx.addLine(to: CGPoint(x: tx, y: ty))
+			ctx.strokePath()
+
+			// --- Border ring ---
+			ctx.setStrokeColor(borderColor.cgColor)
+			ctx.setLineWidth(1.8)
 			let inset: CGFloat = 1.5
 			ctx.addEllipse(in: CGRect(x: inset, y: inset, width: size - inset * 2, height: size - inset * 2))
 			ctx.strokePath()
@@ -599,7 +621,6 @@ class StatusBarController: NSObject {
 		}
 
 		poller.start()
-
 	}
 
 	private func buildMenu() {
@@ -905,6 +926,8 @@ class StatusBarController: NSObject {
 			resetsAt: usage.sevenDay.resetsAt,
 			windowHours: 168.0
 		)
+		let dColor = daily.color
+		let wColor = weekly.color
 
 		let dTimeLeft = PaceCalculator.timeRemainingFraction(
 			resetsAt: usage.fiveHour.resetsAt, windowHours: 5.0
@@ -925,13 +948,13 @@ class StatusBarController: NSObject {
 		let dPie = MenuBarIcon.usagePie(
 			timeRemaining: dTimeLeft,
 			usage: usage.fiveHour.utilization / 100,
-			color: daily.color,
+			color: dColor,
 			size: pieSize
 		)
 		let wPie = MenuBarIcon.usagePie(
 			timeRemaining: wTimeLeft,
 			usage: usage.sevenDay.utilization / 100,
-			color: weekly.color,
+			color: wColor,
 			size: pieSize
 		)
 

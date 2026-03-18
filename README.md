@@ -62,8 +62,17 @@ Edit directly or use the Settings dialog. Restart the app after changing poll in
 ```json
 {
   "pollIntervalSeconds": 60,
-  "displayPercentsInMenubar": true,
-  "paceYellowBand": 0.25,
+  "menuBarDisplay": "percentages",
+  "menuBarFontSize": 14,
+  "pieSize": 26,
+  "pieGap": 5,
+  "piePadLeft": 8,
+  "piePadRight": 6,
+  "yellowAtPace": 0.80,
+  "redAtPace": 0.90,
+  "colorGreen": "#5CD88A",
+  "colorYellow": "#F0DC5A",
+  "colorRed": "#FF2D2D",
   "showSonnet": false,
   "yellowEnabled": true,
   "yellowDays": 3,
@@ -72,16 +81,49 @@ Edit directly or use the Settings dialog. Restart the app after changing poll in
 }
 ```
 
+**Display**
+
 | Key | Default | Description |
 |-----|---------|-------------|
-| `pollIntervalSeconds` | `60` | How often to poll claude.ai (seconds) |
-| `displayPercentsInMenubar` | `true` | `true`: show D/W percentages, `false`: show robot icon |
-| `paceYellowBand` | `0.25` | Proportion of pace that triggers yellow (0–1). At 0.25, the top 25% of pace is yellow. Smaller = less warning, larger = more. |
+| `menuBarDisplay` | `"percentages"` | `"percentages"`, `"pies"`, or `"icon"` |
+| `menuBarFontSize` | `14` | Font size for percentage text mode |
+| `pieSize` | `26` | Diameter of pie charts (pixels) |
+| `pieGap` | `5` | Gap between the two pie charts |
+| `piePadLeft` | `8` | Left padding for pie pair |
+| `piePadRight` | `6` | Right padding for pie pair |
+
+**Pacing**
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `yellowAtPace` | `0.80` | Go yellow when usage reaches 80% of pace |
+| `redAtPace` | `0.90` | Go red when usage reaches 90% of pace |
+
+Pace = fraction of window elapsed. If you're 50% through the window, pace is 50%. Yellow at 80% of that (40% usage), red at 90% (45% usage). The pie geometry shows time vs usage visually — color tells you whether you're on track to run out.
+
+**Colors**
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `colorGreen` | `"#5CD88A"` | Comfortable — well under pace |
+| `colorYellow` | `"#F0DC5A"` | Caution — approaching pace |
+| `colorRed` | `"#FF2D2D"` | Danger — at or over pace |
+
+**Session key expiry warnings**
+
+| Key | Default | Description |
+|-----|---------|-------------|
 | `showSonnet` | `false` | Show Sonnet usage in dropdown menu |
 | `yellowEnabled` | `true` | Show yellow warning when session key is expiring |
 | `yellowDays` | `3` | Days before expiry to show yellow warning |
 | `redEnabled` | `true` | Show red warning when session key is expiring |
 | `redDays` | `0` | Days before expiry to show red warning |
+
+**Polling**
+
+| Key | Default | Description |
+|-----|---------|-------------|
+| `pollIntervalSeconds` | `60` | How often to poll claude.ai (seconds) |
 
 Edit the file directly, or ask your human to ask you to update it. You know what you want.
 
