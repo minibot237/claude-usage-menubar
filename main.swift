@@ -507,7 +507,7 @@ class StatusBarController: NSObject {
 
 		menu.addItem(.separator())
 
-		let updated = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
+		let updated = NSMenuItem(title: "Last Update: --", action: nil, keyEquivalent: "")
 		updated.tag = 104
 		menu.addItem(updated)
 
@@ -527,7 +527,7 @@ class StatusBarController: NSObject {
 		menu.addItem(toggle)
 
 		let settings = NSMenuItem(
-			title: "Settings", action: #selector(openSettings), keyEquivalent: ""
+			title: "Settings...", action: #selector(openSettings), keyEquivalent: ""
 		)
 		settings.target = self
 		menu.addItem(settings)
@@ -627,7 +627,7 @@ class StatusBarController: NSObject {
 		}
 
 		// Last updated timestamp (tag 104) — clickable to refresh
-		statusItem.menu?.item(withTag: 104)?.title = "Updated: \(timeFmt.string(from: Date()))"
+		statusItem.menu?.item(withTag: 104)?.title = "Last Update: \(timeFmt.string(from: Date()))"
 
 		// Cookie age menu item
 		updateCookieAgeItem()
