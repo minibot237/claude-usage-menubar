@@ -586,7 +586,7 @@ enum MenuBarIcon {
 	/// - color: pace color for the needle
 	static func gauge(elapsed: Double, usage: Double, color: NSColor, size: CGFloat = 28) -> NSImage {
 		let w = size
-		let barH: CGFloat = 4 // 1px border top/bottom + 2px fill
+		let barH: CGFloat = 6 // 1px border top/bottom + 4px fill
 		let h = size * 0.65 + barH + 2 // arc + gap + bar
 		let img = NSImage(size: NSSize(width: w, height: h))
 		img.lockFocus()
@@ -605,34 +605,37 @@ enum MenuBarIcon {
 			let startRad = startDeg * .pi / 180
 			let endRad = endDeg * .pi / 180
 
-			// --- Faint colored zone arcs ---
-			let zoneWidth: CGFloat = 4.0
-			let greenColor = PaceColors.green.withAlphaComponent(0.2)
-			let yellowColor = PaceColors.yellow.withAlphaComponent(0.2)
-			let redColor = PaceColors.red.withAlphaComponent(0.2)
+			// --- Faint colored zone wedges (filled, from center to arc) ---
+			let center = CGPoint(x: centerX, y: centerY)
+			let greenColor = PaceColors.green.withAlphaComponent(0.15)
+			let yellowColor = PaceColors.yellow.withAlphaComponent(0.15)
+			let redColor = PaceColors.red.withAlphaComponent(0.15)
 
 			// Green: 0–40% of sweep
 			let greenEnd = startRad - (sweepDeg * 0.40) * .pi / 180
-			ctx.setStrokeColor(greenColor.cgColor)
-			ctx.setLineWidth(zoneWidth)
-			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+			ctx.setFillColor(greenColor.cgColor)
+			ctx.move(to: center)
+			ctx.addArc(center: center, radius: radius,
 					   startAngle: startRad, endAngle: greenEnd, clockwise: true)
-			ctx.strokePath()
+			ctx.closePath()
+			ctx.fillPath()
 
 			// Yellow: 40–75% of sweep
 			let yellowEnd = startRad - (sweepDeg * 0.75) * .pi / 180
-			ctx.setStrokeColor(yellowColor.cgColor)
-			ctx.setLineWidth(zoneWidth)
-			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+			ctx.setFillColor(yellowColor.cgColor)
+			ctx.move(to: center)
+			ctx.addArc(center: center, radius: radius,
 					   startAngle: greenEnd, endAngle: yellowEnd, clockwise: true)
-			ctx.strokePath()
+			ctx.closePath()
+			ctx.fillPath()
 
 			// Red: 75–100% of sweep
-			ctx.setStrokeColor(redColor.cgColor)
-			ctx.setLineWidth(zoneWidth)
-			ctx.addArc(center: CGPoint(x: centerX, y: centerY), radius: radius,
+			ctx.setFillColor(redColor.cgColor)
+			ctx.move(to: center)
+			ctx.addArc(center: center, radius: radius,
 					   startAngle: yellowEnd, endAngle: endRad, clockwise: true)
-			ctx.strokePath()
+			ctx.closePath()
+			ctx.fillPath()
 
 			// --- Thin arc outline ---
 			let outlineColor: CGFloat = isDark ? 0.4 : 0.65
@@ -682,7 +685,7 @@ enum MenuBarIcon {
 			ctx.setLineWidth(1.0)
 			ctx.stroke(CGRect(x: barInset, y: 0.5, width: barWidth, height: barH - 1))
 
-			// Fill (2px inside the border)
+			// Fill (4px inside the border)
 			let filledWidth = (barWidth - 2) * CGFloat(min(1, max(0, elapsed)))
 			let barColor = color.blended(withFraction: 0.3, of: isDark ? .white : .black) ?? color
 			ctx.setFillColor(barColor.withAlphaComponent(0.7).cgColor)
