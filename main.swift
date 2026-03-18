@@ -58,8 +58,8 @@ struct Prefs: Codable {
 	var menuBarFontSize: Int = 14
 	var pieSize: Int = 26
 	var pieGap: Int = 5
-	var piePadLeft: Int = 4
-	var piePadRight: Int = 3
+	var piePadLeft: Int = 2
+	var piePadRight: Int = 2
 	var yellowAtPace: Double = 0.80  // go yellow when usage reaches this fraction of pace
 	var redAtPace: Double = 0.90     // go red when usage reaches this fraction of pace
 	var colorGreen: String = "#5CD88A"
