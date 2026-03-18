@@ -4,7 +4,7 @@ import Cocoa
 
 enum Config {
 	static let defaultPollInterval: TimeInterval = 60
-	static let paceThreshold: Double = 20.0
+	// paceThreshold moved to Prefs.paceYellowBand
 	static let baseURL = "https://claude.ai/api"
 	static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
 	static let cookieDefaultLifetimeDays = 30
@@ -54,6 +54,7 @@ struct Organization: Decodable {
 struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var displayPercentsInMenubar: Bool = true
+	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var showSonnet: Bool = false
 	var yellowEnabled: Bool = true
 	var yellowDays: Int = 3
@@ -240,9 +241,9 @@ enum PaceCalculator {
 	static func calculate(
 		utilization: Double,
 		resetsAt: String?,
-		windowHours: Double,
-		threshold: Double = Config.paceThreshold
+		windowHours: Double
 	) -> PaceResult {
+		let yellowBand = Prefs.load().paceYellowBand
 		let usagePercent = utilization
 		let pct = Int(round(usagePercent))
 
@@ -258,7 +259,7 @@ enum PaceCalculator {
 		}
 
 		let pace = computePace(resetDate: resetDate, windowHours: windowHours)
-		let greenCeiling = pace * 0.75
+		let greenCeiling = pace * (1 - yellowBand)
 
 		if usagePercent > pace {
 			return PaceResult(percentage: pct, color: .systemRed)
@@ -537,6 +538,14 @@ class StatusBarController: NSObject {
 
 		menu.addItem(.separator())
 
+		let toggle = NSMenuItem(
+			title: Prefs.load().displayPercentsInMenubar ? "Hide Percentages" : "Show Percentages",
+			action: #selector(togglePercents), keyEquivalent: ""
+		)
+		toggle.target = self
+		toggle.tag = 105
+		menu.addItem(toggle)
+
 		let settings = NSMenuItem(
 			title: "Settings...", action: #selector(openSettings), keyEquivalent: ""
 		)
@@ -733,6 +742,23 @@ class StatusBarController: NSObject {
 			try? FileManager.default.setAttributes(
 				[.posixPermissions: 0o644], ofItemAtPath: Config.latestPath
 			)
+		}
+	}
+
+	@objc private func togglePercents() {
+		var prefs = Prefs.load()
+		prefs.displayPercentsInMenubar.toggle()
+		prefs.save()
+
+		// Update menu item title
+		statusItem.menu?.item(withTag: 105)?.title =
+			prefs.displayPercentsInMenubar ? "Hide Percentages" : "Show Percentages"
+
+		// Re-render with current data
+		if let usage = lastUsage {
+			render(usage)
+		} else {
+			statusItem.button?.attributedTitle = NSAttributedString(string: "")
 		}
 	}
 
