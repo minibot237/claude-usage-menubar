@@ -507,14 +507,14 @@ class StatusBarController: NSObject {
 
 		menu.addItem(.separator())
 
+		let updated = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
+		updated.tag = 104
+		menu.addItem(updated)
+
 		let cookieAge = NSMenuItem(title: "", action: nil, keyEquivalent: "")
 		cookieAge.tag = 101
 		cookieAge.isHidden = true
 		menu.addItem(cookieAge)
-
-		let updated = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
-		updated.tag = 104
-		menu.addItem(updated)
 
 		menu.addItem(.separator())
 
