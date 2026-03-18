@@ -314,12 +314,20 @@ enum ClaudeCodeAuth {
 // MARK: - Auth Resolver
 
 enum AuthResolver {
-	/// Resolve best available auth method: Claude Code OAuth > cookie > none
+	/// Resolve best available auth method: cookie > Claude Code OAuth > none
+	/// Cookie is preferred — the claude.ai endpoint handles frequent polling
+	/// better than the OAuth endpoint which rate-limits aggressively.
 	static func resolve() -> AuthMode {
-		// 1. Try Claude Code OAuth
+		// 1. Try cookie (preferred — no rate limit issues)
+		if let key = CredentialStore.readSessionKey(),
+		   let org = CredentialStore.readOrgId() {
+			NSLog("AuthResolver: using session cookie")
+			return .cookie(sessionKey: key, orgId: org)
+		}
+
+		// 2. Fall back to Claude Code OAuth
 		if let creds = ClaudeCodeAuth.readCredentials() {
 			var orgId = creds.orgId
-			// If no orgId in credentials, try our saved one
 			if orgId.isEmpty, let saved = CredentialStore.readOrgId() {
 				orgId = saved
 			}
@@ -327,13 +335,6 @@ enum AuthResolver {
 				NSLog("AuthResolver: using Claude Code OAuth")
 				return .claudeCode(accessToken: creds.accessToken, orgId: orgId)
 			}
-		}
-
-		// 2. Try cookie
-		if let key = CredentialStore.readSessionKey(),
-		   let org = CredentialStore.readOrgId() {
-			NSLog("AuthResolver: using session cookie")
-			return .cookie(sessionKey: key, orgId: org)
 		}
 
 		return .none
