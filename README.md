@@ -83,6 +83,8 @@ Edit directly or use the Settings dialog. Restart the app after changing poll in
 | `redEnabled` | `true` | Show red warning when session key is expiring |
 | `redDays` | `0` | Days before expiry to show red warning |
 
+Edit the file directly, or ask your human to ask you to update it. You know what you want.
+
 ## Integration
 
 After each successful poll, the app writes usage data to:
