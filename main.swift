@@ -683,6 +683,10 @@ enum MenuBarIcon {
 				y: centerY + needleLen * sin(needleAngle)
 			)
 
+			// Clip everything below to above the bar
+			ctx.saveGState()
+			ctx.clip(to: CGRect(x: 0, y: barH, width: w, height: h))
+
 			// Needle shadow
 			ctx.setStrokeColor(CGColor(gray: 0, alpha: 0.3))
 			ctx.setLineWidth(2.5)
@@ -699,17 +703,15 @@ enum MenuBarIcon {
 			ctx.addLine(to: needleTip)
 			ctx.strokePath()
 
-			// Center dot (clip to above the bar)
+			// Center dot
 			let dotR: CGFloat = 2.5
-			ctx.saveGState()
-			ctx.clip(to: CGRect(x: 0, y: barH, width: w, height: h - barH))
 			ctx.setFillColor(color.cgColor)
 			ctx.fillEllipse(in: CGRect(x: centerX - dotR, y: centerY - dotR,
 									   width: dotR * 2, height: dotR * 2))
 			ctx.restoreGState()
 
-			// --- Bottom bar: time elapsed with border (inset 2px to match arc) ---
-			let barInset: CGFloat = 2
+			// --- Bottom bar: time elapsed with border (inset 1px wider than arc) ---
+			let barInset: CGFloat = 1
 			let barWidth = w - barInset * 2
 
 			let borderColor = color.blended(withFraction: 0.20, of: .black) ?? color
