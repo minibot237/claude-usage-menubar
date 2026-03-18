@@ -55,7 +55,7 @@ struct Prefs: Codable {
 	var pollIntervalSeconds: Int = 60
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var menuBarFontSize: Int = 14
-	var pieSize: Int = 20
+	var pieSize: Int = 22
 	var paceYellowBand: Double = 0.25 // proportion of pace that triggers yellow
 	var colorGreen: String = "#23BF5F"
 	var colorYellow: String = "#FFBF00"
@@ -557,7 +557,6 @@ class StatusBarController: NSObject {
 		applyMenuBarMode()
 
 		buildMenu()
-		statusItem.button?.title = "..."
 
 		poller.onUpdate = { [weak self] usage in
 			self?.lastUsage = usage
@@ -669,6 +668,8 @@ class StatusBarController: NSObject {
 		case "percentages":
 			statusItem.button?.attributedTitle = str
 		case "pies":
+			statusItem.button?.title = ""
+			statusItem.button?.attributedTitle = NSAttributedString(string: "")
 			statusItem.button?.image = buildPieImage(usage: usage)
 			statusItem.button?.image?.isTemplate = false
 		default: break // "icon" — robot stays as-is
@@ -919,7 +920,6 @@ class StatusBarController: NSObject {
 	}
 
 	@objc private func doRefresh() {
-		statusItem.button?.title = "..."
 		poller.poll()
 	}
 
