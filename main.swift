@@ -526,9 +526,8 @@ class StatusBarController: NSObject {
 		menu.addItem(cookieAge)
 
 		let updated = NSMenuItem(
-			title: "Updated: --", action: #selector(doRefresh), keyEquivalent: "u"
+			title: "Updated: --", action: #selector(doRefresh), keyEquivalent: ""
 		)
-		updated.keyEquivalentModifierMask = .command
 		updated.target = self
 		updated.tag = 104
 		menu.addItem(updated)
@@ -536,14 +535,13 @@ class StatusBarController: NSObject {
 		menu.addItem(.separator())
 
 		let settings = NSMenuItem(
-			title: "Settings...", action: #selector(openSettings), keyEquivalent: ","
+			title: "Settings...", action: #selector(openSettings), keyEquivalent: ""
 		)
-		settings.keyEquivalentModifierMask = .command
 		settings.target = self
 		menu.addItem(settings)
 
 		let quit = NSMenuItem(
-			title: "Quit", action: #selector(doQuit), keyEquivalent: "q"
+			title: "Quit", action: #selector(doQuit), keyEquivalent: ""
 		)
 		quit.keyEquivalentModifierMask = .command
 		quit.target = self
