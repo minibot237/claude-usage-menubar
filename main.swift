@@ -512,10 +512,7 @@ class StatusBarController: NSObject {
 		cookieAge.isHidden = true
 		menu.addItem(cookieAge)
 
-		let updated = NSMenuItem(
-			title: "Updated: --", action: #selector(doRefresh), keyEquivalent: ""
-		)
-		updated.target = self
+		let updated = NSMenuItem(title: "Updated: --", action: nil, keyEquivalent: "")
 		updated.tag = 104
 		menu.addItem(updated)
 
