@@ -455,8 +455,8 @@ enum MenuBarIcon {
 
 			let s = size
 
-			// Head (rounded rect)
-			let headRect = CGRect(x: s * 0.15, y: s * 0.10, width: s * 0.7, height: s * 0.52)
+			// Head (rounded rect — taller for mouth room)
+			let headRect = CGRect(x: s * 0.15, y: s * 0.05, width: s * 0.7, height: s * 0.58)
 			let headPath = CGPath(roundedRect: headRect, cornerWidth: s * 0.08,
 								  cornerHeight: s * 0.08, transform: nil)
 			ctx.setStrokeColor(headColor)
@@ -482,7 +482,7 @@ enum MenuBarIcon {
 			ctx.setStrokeColor(hairColor)
 			ctx.setLineWidth(1.6)
 			ctx.setLineCap(.round)
-			let topY = headRect.maxY
+			let topY = headRect.maxY + 1 // 1px above head frame
 
 			// Left sprig — short, leans left
 			ctx.move(to: CGPoint(x: s * 0.38, y: topY))
@@ -672,7 +672,7 @@ class StatusBarController: NSObject {
 		// Menu bar attributed string
 		let base: [NSAttributedString.Key: Any] = [
 			.font: menuFont,
-			.baselineOffset: -1,
+			.baselineOffset: -3,
 		]
 		let str = NSMutableAttributedString()
 
