@@ -4,7 +4,7 @@ import WebKit
 // MARK: - Configuration
 
 enum Config {
-	static let defaultPollInterval: TimeInterval = 60
+	static let defaultPollInterval: TimeInterval = 300
 	// paceThreshold moved to Prefs.paceYellowBand
 	static let baseURL = "https://claude.ai/api"
 	static let userAgent = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.6 Safari/605.1.15"
@@ -53,7 +53,7 @@ struct Organization: Decodable {
 // MARK: - Preferences
 
 struct Prefs: Codable {
-	var pollIntervalSeconds: Int = 60
+	var pollIntervalSeconds: Int = 300
 	var menuBarDisplay: String = "percentages" // "percentages", "pies", "icon"
 	var menuBarFontSize: Int = 14
 	var pieSize: Int = 26
@@ -314,27 +314,14 @@ enum ClaudeCodeAuth {
 // MARK: - Auth Resolver
 
 enum AuthResolver {
-	/// Resolve best available auth method: cookie > Claude Code OAuth > none
-	/// Cookie is preferred — the claude.ai endpoint handles frequent polling
-	/// better than the OAuth endpoint which rate-limits aggressively.
+	/// Resolve auth: cookie only for now.
+	/// OAuth disabled — Anthropic rate-limits and expires tokens aggressively
+	/// when polled, which kills the CLI auth session.
 	static func resolve() -> AuthMode {
-		// 1. Try cookie (preferred — no rate limit issues)
 		if let key = CredentialStore.readSessionKey(),
 		   let org = CredentialStore.readOrgId() {
 			NSLog("AuthResolver: using session cookie")
 			return .cookie(sessionKey: key, orgId: org)
-		}
-
-		// 2. Fall back to Claude Code OAuth
-		if let creds = ClaudeCodeAuth.readCredentials() {
-			var orgId = creds.orgId
-			if orgId.isEmpty, let saved = CredentialStore.readOrgId() {
-				orgId = saved
-			}
-			if !orgId.isEmpty {
-				NSLog("AuthResolver: using Claude Code OAuth")
-				return .claudeCode(accessToken: creds.accessToken, orgId: orgId)
-			}
 		}
 
 		return .none
